@@ -44,6 +44,25 @@ if (Astro.request.method === 'POST') {
       await db.run('UPDATE utilizadores SET role = ? WHERE id = ? AND role != ?', String(fd.get('role')), id, 'externo');
       await auditar(user, 'Alteração de perfil', `utilizador:${id} → ${fd.get('role')}`, Astro.locals.ip);
       ok = 'Perfil actualizado.';
+    } else if (accao === 'aprovar') {
+      const role = String(fd.get('role'));
+      const pessoaId = Number(fd.get('pessoa_id')) || null;
+      if (!PERFIS[role] || role === 'admin') erro = 'Escolha um perfil válido (o perfil de administrador não pode ser atribuído na aprovação).';
+      else if (role === 'externo' && pessoaId && !await db.get('SELECT 1 FROM pessoas WHERE id = ?', pessoaId)) erro = 'O n.º de registo indicado não existe.';
+      else {
+        const r = await db.run(`UPDATE utilizadores SET role = ?, ativo = 1, pendente = 0, pessoa_id = ?, aprovado_por = ?, aprovado_em = agora()
+          WHERE id = ? AND pendente = 1`, role, role === 'externo' ? pessoaId : null, user.id, id);
+        if (r.changes) {
+          await auditar(user, 'Aprovação de pedido de registo', `utilizador:${id} (${role})`, Astro.locals.ip);
+          ok = `Conta aprovada com o perfil «${PERFIS[role]}». A pessoa já pode entrar com a palavra-passe que escolheu.`;
+        }
+      }
+    } else if (accao === 'rejeitar') {
+      const r = await db.run('DELETE FROM utilizadores WHERE id = ? AND pendente = 1', id);
+      if (r.changes) {
+        await auditar(user, 'Rejeição de pedido de registo', `utilizador:${id}`, Astro.locals.ip);
+        ok = 'Pedido rejeitado e removido.';
+      }
     }
   } else if (id === user.id) {
     erro = 'Não pode alterar a sua própria conta aqui. Use "Conta".';
@@ -52,13 +71,56 @@ if (Astro.request.method === 'POST') {
 
 const lista = await db.all(`SELECT u.*, p.nome pessoa_nome,
   (SELECT MAX(criado_em) FROM auditoria a WHERE a.utilizador_id = u.id AND a.acao = 'Início de sessão') ultimo
-  FROM utilizadores u LEFT JOIN pessoas p ON p.id = u.pessoa_id ORDER BY u.ativo DESC, u.role, u.nome`);
+  FROM utilizadores u LEFT JOIN pessoas p ON p.id = u.pessoa_id WHERE u.pendente = 0 ORDER BY u.ativo DESC, u.role, u.nome`);
+const pedidos = await db.all('SELECT * FROM utilizadores WHERE pendente = 1 ORDER BY criado_em');
+const PERFIS_APROVACAO = Object.entries(PERFIS).filter(([k]) => k !== 'admin');
 const PERFIS_INTERNOS = Object.entries(PERFIS).filter(([k]) => k !== 'externo');
 ---
 <App title="Utilizadores" ativo="utilizadores" subtitulo="Contas de acesso e perfis de permissão.">
   {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
   {ok && <div class="alerta alerta--ok" role="status">{ok} {senhaGerada && <strong class="mono">{senhaGerada}</strong>}
     {senhaGerada && <><br /><span class="hint">Comunique-a de forma segura; não volta a ser mostrada.</span></>}</div>}
+
+  <section class="card" style="margin-bottom:1rem" aria-labelledby="t-pedidos">
+    <h2 id="t-pedidos" style="font-size:1.05rem">Pedidos de registo {pedidos.length > 0 && <span class="tag pendente">{pedidos.length} pendente(s)</span>}</h2>
+    {pedidos.length === 0 ? <p class="vazio" style="padding:0">Não há pedidos a aguardar aprovação.</p> : (
+      <div class="tabela-wrap">
+        <table>
+          <caption class="sr-only">Pedidos de registo pendentes</caption>
+          <thead><tr><th>Pessoa</th><th>Pedido</th><th>Data</th><th>Aprovar como</th><th>Rejeitar</th></tr></thead>
+          <tbody>
+            {pedidos.map((u) => (
+              <tr>
+                <td>{u.nome}<br /><a class="hint" href={`mailto:${u.email}`}>{u.email}</a></td>
+                <td>{PERFIS[u.perfil_pedido] ?? '—'}{u.organizacao && <><br /><span class="hint">{u.organizacao}</span></>}
+                  {u.justificacao && <><br /><span class="hint" style="white-space:pre-wrap">«{u.justificacao}»</span></>}</td>
+                <td class="hint">{u.criado_em}</td>
+                <td>
+                  <form method="post" class="linha-accoes">
+                    <input type="hidden" name="accao" value="aprovar" /><input type="hidden" name="id" value={u.id} />
+                    <label class="sr-only" for={`ap${u.id}`}>Perfil para {u.nome}</label>
+                    <select id={`ap${u.id}`} name="role" style="min-height:36px;width:auto">
+                      {PERFIS_APROVACAO.map(([k, r]) => <option value={k} selected={u.perfil_pedido === k}>{r}</option>)}
+                    </select>
+                    <label class="sr-only" for={`pp${u.id}`}>N.º do registo de beneficiário (opcional)</label>
+                    <input id={`pp${u.id}`} type="number" name="pessoa_id" min="1" placeholder="N.º registo" style="min-height:36px;width:7.5rem" />
+                    <button class="btn btn--sm" type="submit">Aprovar</button>
+                  </form>
+                </td>
+                <td>
+                  <form method="post" onsubmit="return confirm('Rejeitar e remover este pedido?')">
+                    <input type="hidden" name="accao" value="rejeitar" /><input type="hidden" name="id" value={u.id} />
+                    <button class="btn btn--ghost btn--sm" type="submit">Rejeitar</button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+    <p class="hint" style="margin-top:.75rem">O n.º de registo só se usa para beneficiários: associa a conta à ficha para a pessoa ver «Os meus dados».</p>
+  </section>
 
   <section class="card" style="margin-bottom:1rem">
     <h2 style="font-size:1.05rem">Novo utilizador</h2>

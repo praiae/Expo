@@ -72,6 +72,12 @@ Texto com uma referência.[^ref1]
 
 As notas `[^...]` aparecem numeradas na secção «Referências». Depois de um `git push`, o Netlify publica o artigo.
 
+## Contas e registo
+
+Qualquer pessoa pode pedir uma conta em `/app/registo`. A conta fica **pendente e sem acesso** até um
+administrador a aprovar em Administração → Utilizadores, onde escolhe o perfil (o perfil de administrador
+nunca é atribuído pelo auto-registo). Há um limite de 5 pedidos por hora por endereço IP.
+
 ## Perfis
 
 | Perfil | Acesso |

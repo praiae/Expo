@@ -16,6 +16,13 @@ CREATE TABLE IF NOT EXISTS utilizadores (
   criado_em TEXT NOT NULL DEFAULT agora()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ux_utilizadores_email ON utilizadores (lower(email));
+-- Auto-registo (migração 0002): pedidos de conta ficam pendentes até aprovação.
+ALTER TABLE utilizadores ADD COLUMN IF NOT EXISTS pendente INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE utilizadores ADD COLUMN IF NOT EXISTS perfil_pedido TEXT;
+ALTER TABLE utilizadores ADD COLUMN IF NOT EXISTS organizacao TEXT;
+ALTER TABLE utilizadores ADD COLUMN IF NOT EXISTS justificacao TEXT;
+ALTER TABLE utilizadores ADD COLUMN IF NOT EXISTS aprovado_por INTEGER;
+ALTER TABLE utilizadores ADD COLUMN IF NOT EXISTS aprovado_em TEXT;
 
 CREATE TABLE IF NOT EXISTS sessoes (
   token TEXT PRIMARY KEY,

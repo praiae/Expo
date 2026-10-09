@@ -1,13 +1,16 @@
 // Sessões por cookie httpOnly guardadas na base de dados.
 import { randomBytes } from 'node:crypto';
-import { db, verificarPassword, auditar } from './db.js';
+import { db, verificarPassword, hashPassword, auditar } from './db.js';
 
 export const COOKIE_SESSAO = 'ec_sessao';
 const DURACAO_HORAS = 12;
 
 export async function iniciarSessao(email, password, ip) {
   const u = await db.get('SELECT * FROM utilizadores WHERE lower(email) = lower(?)', String(email).trim());
-  if (!u || !u.ativo || !verificarPassword(password, u.password_hash)) {
+  const passwordOk = !!u && verificarPassword(password, u.password_hash);
+  // Só revela que a conta aguarda aprovação a quem sabe a palavra-passe (evita enumerar contas).
+  if (passwordOk && u.pendente) return { pendente: true };
+  if (!passwordOk || !u.ativo) {
     await auditar(u, 'Tentativa de acesso falhada', String(email).slice(0, 120), ip);
     return null;
   }
@@ -37,4 +40,35 @@ export function opcoesCookie(expira) {
     path: '/', httpOnly: true, sameSite: 'lax', secure: import.meta.env?.PROD ?? false,
     expires: expira ? new Date(expira) : undefined,
   };
+}
+
+// Perfis que se podem pedir no auto-registo (nunca "admin").
+export const PERFIS_PEDIDO = {
+  externo: 'Beneficiário ou familiar',
+  tecnico: 'Técnico de registo',
+  analista: 'Analista estatístico',
+  gestor: 'Gestor do projecto',
+};
+
+/**
+ * Cria um pedido de conta: fica inactivo e pendente até aprovação, sempre com o perfil mínimo ("externo").
+ * Devolve { ok: true } mesmo que o e-mail já exista, para não revelar contas registadas.
+ */
+export async function registarConta({ nome, email, password, perfil, organizacao, justificacao }, ip) {
+  const existe = await db.get('SELECT 1 FROM utilizadores WHERE lower(email) = lower(?)', email);
+  if (existe) {
+    await auditar(null, 'Pedido de registo com e-mail existente', email.slice(0, 120), ip);
+    return { ok: true };
+  }
+  await db.run(`INSERT INTO utilizadores (nome, email, password_hash, role, ativo, pendente, perfil_pedido, organizacao, justificacao)
+    VALUES (?, ?, ?, 'externo', 0, 1, ?, ?, ?) ON CONFLICT ((lower(email))) DO NOTHING`, nome, email, hashPassword(password), perfil, organizacao || null, justificacao || null);
+  await auditar(null, 'Pedido de registo', `${email.slice(0, 120)} (${perfil})`, ip);
+  return { ok: true };
+}
+
+/** Limite simples contra abuso: pedidos de registo por IP na última hora. */
+export async function registosRecentes(ip) {
+  const { n } = await db.get(`SELECT COUNT(*) n FROM auditoria WHERE acao LIKE 'Pedido de registo%'
+    AND criado_em > agora('-1 hour') AND (ip = ?::text OR ?::text IS NULL)`, ip, ip);
+  return n;
 }

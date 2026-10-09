@@ -18,6 +18,9 @@ const ROTAS = [
   ['/app/meus-dados', 'meus-dados'],
 ];
 
+// Páginas da área reservada acessíveis sem sessão.
+const PUBLICAS = new Set(['/app/login', '/app/registo']);
+
 export const onRequest = defineMiddleware(async (ctx, next) => {
   // Páginas pré-geradas no build (blog): não há pedido, cookies nem sessão.
   if (ctx.isPrerendered) {
@@ -31,7 +34,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   // clientAddress só usa X-Forwarded-For quando o Host foi validado (security.allowedDomains).
   try { ctx.locals.ip = ctx.clientAddress || null; } catch { ctx.locals.ip = null; }
 
-  if (pathname.startsWith('/app') && pathname !== '/app/login') {
+  if (pathname.startsWith('/app') && !PUBLICAS.has(pathname)) {
     const user = ctx.locals.user;
     if (!user) return ctx.redirect(`/app/login?r=${encodeURIComponent(pathname + ctx.url.search)}`);
     if (pathname === '/app' || pathname === '/app/') {

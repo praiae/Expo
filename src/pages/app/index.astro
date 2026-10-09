@@ -5,11 +5,14 @@ import Colunas from '../../components/Colunas.astro';
 import MapaProvincias from '../../components/MapaProvincias.astro';
 import { calcularEstatisticas, contagemPendentes, fmt, pct } from '../../lib/estatisticas.js';
 import { pode } from '../../lib/constantes.js';
+import { db } from '../../lib/db.js';
 
 const user = Astro.locals.user;
 const e = await calcularEstatisticas();
 const t = e.totais;
 const pend = await contagemPendentes();
+const pedidosRegisto = pode(user, 'administracao')
+  ? (await db.get('SELECT COUNT(*) n FROM utilizadores WHERE pendente = 1')).n : 0;
 const verRegistos = pode(user, 'beneficiarios.ver');
 const ligProv = verRegistos ? (p: string) => `/app/beneficiarios?provincia=${encodeURIComponent(p)}` : undefined;
 ---
@@ -18,6 +21,12 @@ const ligProv = verRegistos ? (p: string) => `/app/beneficiarios?provincia=${enc
     {pode(user, 'beneficiarios.editar') && <a class="btn" href="/app/beneficiarios/novo">+ Novo registo</a>}
     {pode(user, 'relatorios') && <a class="btn btn--ghost" href="/app/relatorios">Relatórios</a>}
   </Fragment>
+
+  {pedidosRegisto > 0 && (
+    <div class="alerta alerta--aviso">
+      <strong>{fmt(pedidosRegisto)}</strong> pedido(s) de conta a aguardar aprovação. <a href="/app/utilizadores">Rever pedidos →</a>
+    </div>
+  )}
 
   {verRegistos && (pend.pendentes > 0 || pend.incompletos > 0) && (
     <div class="alerta alerta--aviso">

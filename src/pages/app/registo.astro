@@ -1,0 +1,130 @@
+---
+import Base from '../../layouts/Base.astro';
+import A11y from '../../components/A11y.astro';
+import { registarConta, registosRecentes, PERFIS_PEDIDO } from '../../lib/auth.js';
+
+if (Astro.locals.user) return Astro.redirect('/app');
+
+const LIMITE_POR_HORA = 5;
+let enviado = false;
+let erros: Record<string, string> = {};
+const v = { nome: '', email: '', perfil: 'externo', organizacao: '', justificacao: '' };
+
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const t = (k: string, max = 200) => String(fd.get(k) || '').trim().slice(0, max);
+  v.nome = t('nome'); v.email = t('email'); v.perfil = t('perfil'); v.organizacao = t('organizacao'); v.justificacao = t('justificacao', 1000);
+  const password = String(fd.get('password') || '');
+  const confirmar = String(fd.get('confirmar') || '');
+
+  if (fd.get('website')) enviado = true; // robô: finge sucesso
+  else {
+    if (v.nome.length < 3) erros.nome = 'Indique o nome completo.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) erros.email = 'Indique um e-mail válido.';
+    if (!PERFIS_PEDIDO[v.perfil]) erros.perfil = 'Escolha um perfil.';
+    if (password.length < 10) erros.password = 'A palavra-passe deve ter pelo menos 10 caracteres.';
+    else if (password !== confirmar) erros.confirmar = 'As palavras-passe não coincidem.';
+    if (v.perfil !== 'externo' && !v.organizacao) erros.organizacao = 'Indique a organização onde trabalha.';
+    if (!fd.get('aceito')) erros.aceito = 'É necessário aceitar a política de privacidade.';
+
+    if (!Object.keys(erros).length) {
+      if ((await registosRecentes(Astro.locals.ip)) >= LIMITE_POR_HORA) {
+        erros.geral = 'Recebemos demasiados pedidos a partir desta ligação. Tente novamente mais tarde.';
+        Astro.response.status = 429;
+      } else {
+        await registarConta({ ...v, password }, Astro.locals.ip);
+        enviado = true;
+      }
+    } else {
+      Astro.response.status = 422;
+    }
+  }
+}
+const inv = (k: string) => (erros[k] ? 'true' : undefined);
+---
+<Base title="Criar conta · Expo Connect Angola">
+  <main id="conteudo" class="login">
+    <div class="topo"><a href="/">← Voltar ao site</a><A11y /></div>
+    <div class="card caixa">
+      <img class="logo-img" src="/logo.png" alt="Expo Connect Angola" width="64" height="64" />
+      <p class="topic">Área reservada</p>
+      {enviado ? (
+        <div role="status">
+          <h1>Pedido recebido</h1>
+          <p class="hint">Obrigado. O seu pedido de conta foi registado e será analisado por um administrador.
+            Assim que for aprovado, poderá entrar com o e-mail e a palavra-passe que escolheu.</p>
+          <a class="btn" href="/app/login" style="width:100%;margin-top:1.5rem">Ir para o login</a>
+        </div>
+      ) : (
+        <>
+          <h1>Criar conta</h1>
+          <p class="hint">Peça acesso à plataforma. Por segurança, todas as contas novas são aprovadas por um administrador antes do primeiro acesso.</p>
+          {erros.geral && <div class="alerta alerta--erro" role="alert">{erros.geral}</div>}
+          {Object.keys(erros).length > 0 && !erros.geral && (
+            <div class="alerta alerta--erro" role="alert">Há {Object.keys(erros).length} campo(s) a corrigir.</div>
+          )}
+          <form method="post" class="stack" novalidate>
+            <label class="field"><span>Nome completo</span>
+              <input type="text" name="nome" value={v.nome} autocomplete="name" required aria-invalid={inv('nome')} />
+              {erros.nome && <span class="erro">{erros.nome}</span>}
+            </label>
+            <label class="field"><span>E-mail</span>
+              <input type="email" name="email" value={v.email} autocomplete="email" required aria-invalid={inv('email')} />
+              {erros.email && <span class="erro">{erros.email}</span>}
+            </label>
+            <label class="field"><span>Perfil pretendido</span>
+              <select name="perfil" aria-invalid={inv('perfil')}>
+                {Object.entries(PERFIS_PEDIDO).map(([k, r]) => <option value={k} selected={v.perfil === k}>{r}</option>)}
+              </select>
+              {erros.perfil ? <span class="erro">{erros.perfil}</span> : <span class="hint">O administrador confirma o perfil ao aprovar a conta.</span>}
+            </label>
+            <label class="field"><span>Organização <small class="hint">(obrigatória para profissionais)</small></span>
+              <input type="text" name="organizacao" value={v.organizacao} autocomplete="organization" aria-invalid={inv('organizacao')} />
+              {erros.organizacao && <span class="erro">{erros.organizacao}</span>}
+            </label>
+            <label class="field"><span>Motivo do pedido <small class="hint">(opcional)</small></span>
+              <textarea name="justificacao" rows="3" maxlength="1000">{v.justificacao}</textarea>
+            </label>
+            <label class="field"><span>Palavra-passe</span>
+              <input type="password" name="password" autocomplete="new-password" minlength="10" required aria-invalid={inv('password')} />
+              {erros.password ? <span class="erro">{erros.password}</span> : <span class="hint">Mínimo de 10 caracteres.</span>}
+            </label>
+            <label class="field"><span>Confirmar palavra-passe</span>
+              <input type="password" name="confirmar" autocomplete="new-password" required aria-invalid={inv('confirmar')} />
+              {erros.confirmar && <span class="erro">{erros.confirmar}</span>}
+            </label>
+            <label class="check">
+              <input type="checkbox" name="aceito" value="1" aria-invalid={inv('aceito')} />
+              <span>Li e aceito a <a href="/privacidade" target="_blank" rel="noopener">política de privacidade</a>.</span>
+            </label>
+            {erros.aceito && <span class="erro">{erros.aceito}</span>}
+            <label class="armadilha" aria-hidden="true">Website<input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+            <button class="btn" type="submit" style="width:100%">Pedir conta</button>
+          </form>
+          <p class="alternativa">Já tem conta? <a href="/app/login">Entrar</a></p>
+        </>
+      )}
+    </div>
+  </main>
+</Base>
+
+<style>
+  /* Centragem vertical que nunca corta o conteúdo quando é mais alto que o ecrã. */
+  .login > :first-child { margin-top: auto; } .login > :last-child { margin-bottom: auto; }
+  .login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 16px; gap: 1.25rem;
+    background-image: linear-gradient(to bottom, transparent 40%, var(--bg)),
+      repeating-linear-gradient(30deg, var(--border) 0 1px, transparent 1px 60px),
+      repeating-linear-gradient(-30deg, var(--border) 0 1px, transparent 1px 60px); }
+  .topo { width: min(480px, 100%); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; font: var(--t-body-2); }
+  .topo a { color: var(--text); text-decoration: none; font-weight: 500; }
+  .topo a:hover { color: var(--link); }
+  .caixa { width: min(480px, 100%); padding: 2.5rem 2rem; box-shadow: 0 30px 60px -30px rgb(20 40 90 / .25); }
+  .caixa img { margin-bottom: 1.5rem; }
+  .caixa h1 { font: var(--t-h4); margin: 0 0 .5rem; }
+  .caixa .hint { font: var(--t-body-2); color: var(--text-2); }
+  .field small.hint { font: var(--t-body-3); }
+  form { margin-top: 1.75rem; }
+  .alternativa { margin: 1.5rem 0 0; text-align: center; font: var(--t-body-2); color: var(--text-2); }
+  .armadilha { position: absolute; left: -9999px; }
+  @media (max-width: 480px) { .caixa { padding: 2rem 1.25rem; } }
+</style>

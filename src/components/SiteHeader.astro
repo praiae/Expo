@@ -16,10 +16,14 @@ const LINKS = [
       <span>Expo Connect</span>
     </a>
     <nav aria-label="Site" class="site-nav" id="site-nav" data-aberto="false">
-      <ul>{LINKS.map((l) => <li><a href={l.href}>{l.rot}</a></li>)}</ul>
+      <ul>
+        {LINKS.map((l) => <li><a href={l.href}>{l.rot}</a></li>)}
+        {!user && <li class="so-movel"><a href="/app/registo">Criar conta</a></li>}
+      </ul>
       <div class="site-nav-a11y"><A11y /></div>
     </nav>
     <div class="site-accoes">
+      {!user && <a class="btn btn--ghost site-registo" href="/app/registo">Criar conta</a>}
       <a class="btn site-cta" href="/app">{user ? 'Abrir plataforma' : 'Entrar'}</a>
       <button type="button" class="site-menu" aria-controls="site-nav" aria-expanded="false">
         <span class="sr-only">Menu</span><span aria-hidden="true" class="site-menu-ic"></span>
@@ -62,7 +66,7 @@ const LINKS = [
   .site-nav ul { display: flex; gap: 2rem; list-style: none; margin: 0; padding: 0; }
   .site-nav a { color: var(--text); text-decoration: none; font: var(--t-body-2); font-weight: 500; transition: color .2s; }
   .site-nav a:hover { color: var(--link); }
-  .site-nav-a11y { display: none; }
+  .site-nav-a11y, .so-movel { display: none; }
   .site-accoes { display: flex; align-items: center; gap: .75rem; }
   .site-menu { display: none; width: 48px; height: 48px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; }
   .site-menu-ic, .site-menu-ic::before, .site-menu-ic::after { display: block; width: 18px; height: 2px; margin: auto; background: currentColor; border-radius: 2px; position: relative; transition: transform .2s; }
@@ -79,7 +83,8 @@ const LINKS = [
     .site-nav[data-aberto="true"] { display: flex; }
     .site-nav ul { flex-direction: column; gap: 0; }
     .site-nav li a { display: block; padding: 1rem 0; font: var(--t-h6); border-bottom: 1px solid var(--border); }
-    .site-nav-a11y { display: block; }
+    .site-nav-a11y, .so-movel { display: block; }
   }
+  @media (max-width: 990px) { .site-registo { display: none; } }
   @media (max-width: 420px) { .site-cta { padding: 0 1rem; } .site-marca span { display: none; } }
 </style>

@@ -146,7 +146,7 @@ function motor() {
         await tx.query('SELECT pg_advisory_xact_lock(724001)');
         // Na Netlify Database o esquema é aplicado pelas migrações (netlify/database/migrations) antes de cada deploy.
         if (!PRODUCAO || URL_EXPLICITO) {
-          for (const instr of ESQUEMA.split(/;\s*\n(?=\s*(?:CREATE|--))/)) if (instr.trim()) await tx.query(instr);
+          for (const instr of ESQUEMA.split(/;\s*\n(?=\s*(?:CREATE|ALTER|--))/)) if (instr.trim()) await tx.query(instr);
         }
         await tx.query('INSERT INTO parametros (chave, valor) VALUES ($1, $2) ON CONFLICT (chave) DO NOTHING',
           ['prioridade', JSON.stringify(PARAMETROS_PADRAO)]);

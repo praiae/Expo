@@ -6,6 +6,7 @@ import { iniciarSessao, COOKIE_SESSAO, opcoesCookie } from '../../lib/auth.js';
 // Só aceita redireccionamentos internos para evitar "open redirect".
 const destino = (r: string | null) => (r && r.startsWith('/app') && !r.startsWith('//') ? r : '/app');
 let erro = '';
+let aviso = '';
 let email = '';
 
 if (Astro.locals.user) return Astro.redirect(destino(Astro.url.searchParams.get('r')));
@@ -14,12 +15,16 @@ if (Astro.request.method === 'POST') {
   const fd = await Astro.request.formData();
   email = String(fd.get('email') || '');
   const s = await iniciarSessao(email, String(fd.get('password') || ''), Astro.locals.ip);
-  if (s) {
+  if (s?.pendente) {
+    aviso = 'A sua conta ainda aguarda aprovação de um administrador. Poderá entrar assim que for aprovada.';
+    Astro.response.status = 403;
+  } else if (s) {
     Astro.cookies.set(COOKIE_SESSAO, s.token, opcoesCookie(s.expira));
     return Astro.redirect(destino(String(fd.get('r') || '')));
+  } else {
+    erro = 'E-mail ou palavra-passe incorrectos.';
+    Astro.response.status = 401;
   }
-  erro = 'E-mail ou palavra-passe incorrectos.';
-  Astro.response.status = 401;
 }
 ---
 <Base title="Entrar · Expo Connect Angola">
@@ -31,18 +36,22 @@ if (Astro.request.method === 'POST') {
       <h1>Entrar na plataforma</h1>
       <p class="hint">Acesso para técnicos, analistas, gestores e beneficiários registados.</p>
       {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
+      {aviso && <div class="alerta alerta--aviso" role="alert">{aviso}</div>}
       <form method="post" class="stack">
         <input type="hidden" name="r" value={Astro.url.searchParams.get('r') || ''} />
         <label class="field"><span>E-mail</span><input type="email" name="email" value={email} autocomplete="username" required autofocus /></label>
         <label class="field"><span>Palavra-passe</span><input type="password" name="password" autocomplete="current-password" required /></label>
         <button class="btn" type="submit" style="width:100%">Entrar</button>
       </form>
+      <p class="alternativa">Ainda não tem conta? <a href="/app/registo">Criar conta</a></p>
     </div>
   </main>
 </Base>
 
 <style>
-  .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; align-content: center; gap: 1.25rem;
+  /* Centragem vertical que nunca corta o conteúdo quando é mais alto que o ecrã. */
+  .login > :first-child { margin-top: auto; } .login > :last-child { margin-bottom: auto; }
+  .login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 2rem 16px; gap: 1.25rem;
     background-image: linear-gradient(to bottom, transparent 40%, var(--bg)),
       repeating-linear-gradient(30deg, var(--border) 0 1px, transparent 1px 60px),
       repeating-linear-gradient(-30deg, var(--border) 0 1px, transparent 1px 60px); }
@@ -54,4 +63,5 @@ if (Astro.request.method === 'POST') {
   .caixa h1 { font: var(--t-h4); margin: 0 0 .5rem; }
   .caixa .hint { font: var(--t-body-2); color: var(--text-2); }
   form { margin-top: 1.75rem; }
+  .alternativa { margin: 1.5rem 0 0; text-align: center; font: var(--t-body-2); color: var(--text-2); }
 </style>
