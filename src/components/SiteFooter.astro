@@ -3,13 +3,51 @@ const ano = new Date().getFullYear();
 ---
 <footer class="site">
   <div class="container rodape">
-    <p><strong>Expo Connect Angola</strong> — acessibilidade, inclusão e dados ao serviço das pessoas.</p>
-    <p class="hint">© {ano} Expo Connect Angola · <a href="/privacidade">Política de privacidade</a> · <a href="/app">Área reservada</a></p>
+    <div class="rodape-esq">
+      <a class="rodape-marca" href="/"><img class="logo-img" src="/logo.png" alt="" width="44" height="44" /><span>Expo Connect Angola</span></a>
+      <p class="rodape-texto">Acessibilidade, inclusão e dados ao serviço das pessoas com deficiência, idosos e pessoas com mobilidade reduzida.</p>
+    </div>
+    <nav class="rodape-nav" aria-label="Rodapé">
+      <div>
+        <p class="rodape-tit">Plataforma</p>
+        <ul>
+          <li><a href="/#modulos">Módulos</a></li>
+          <li><a href="/#funcionalidades">Funcionalidades</a></li>
+          <li><a href="/#como">Como funciona</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="rodape-tit">Informação</p>
+        <ul>
+          <li><a href="/privacidade">Privacidade</a></li>
+          <li><a href="/#contacto">Contacto</a></li>
+          <li><a href="/app">Área reservada</a></li>
+        </ul>
+      </div>
+    </nav>
+  </div>
+  <div class="container rodape-base">
+    <p>© {ano} Expo Connect Angola</p>
+    <p>Dados tratados nos termos da Lei n.º 22/11</p>
   </div>
 </footer>
 
 <style>
-  .site { border-top: 1px solid var(--border); background: var(--surface); margin-top: 4rem; }
-  .rodape { padding: 2rem 0; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-  .rodape p { margin: 0; }
+  .site { background: var(--surface); margin-top: var(--section-space); border-top: 1px solid var(--border); }
+  .rodape { display: grid; grid-template-columns: 1fr auto; gap: 2rem 4rem; padding: 3rem 0 2rem; }
+  .rodape-marca { display: inline-flex; align-items: center; gap: .625rem; color: var(--text); text-decoration: none; font: var(--t-h6); }
+  .rodape-marca img { border-radius: var(--radius-sm); }
+  .rodape-texto { margin: 1rem 0 0; max-width: 42ch; color: var(--text-2); font: var(--t-body-2); }
+  .rodape-nav { display: flex; gap: 4rem; }
+  .rodape-tit { font: var(--t-title-2); margin: 0 0 .75rem; }
+  .rodape-nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+  .rodape-nav a { color: var(--text-2); text-decoration: none; font: var(--t-body-2); }
+  .rodape-nav a:hover { color: var(--link); text-decoration: underline; }
+  .rodape-base { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: 1.25rem 0 1.75rem; border-top: 1px solid var(--border); }
+  .rodape-base p { margin: 0; color: var(--text-2); font: var(--t-body-3); }
+  @media (max-width: 767px) {
+    .site { margin-top: 96px; }
+    .rodape { grid-template-columns: 1fr; }
+    .rodape-nav { gap: 3rem; }
+  }
 </style>

@@ -27,7 +27,7 @@ const pct = (v: number) => (total ? ` (${((v / total) * 100).toFixed(1).replace(
   .b-nome { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .b-trilho { height: 14px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
   .b-barra { display: block; height: 100%; border-radius: 4px; }
-  .b-valor { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; min-width: 3ch; }
+  .b-valor { font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; min-width: 3ch; }
   .b-pct { font-weight: 500; color: var(--muted); font-size: .8rem; margin-left: .25rem; }
   @media (max-width: 520px) { li { grid-template-columns: 1fr auto; } .b-trilho { grid-column: 1 / -1; grid-row: 2; } }
 </style>

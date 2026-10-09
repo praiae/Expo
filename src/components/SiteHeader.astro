@@ -1,32 +1,85 @@
 ---
 import A11y from './A11y.astro';
 const user = Astro.locals.user;
+const LINKS = [
+  { href: '/#modulos', rot: 'Plataforma' },
+  { href: '/#funcionalidades', rot: 'Funcionalidades' },
+  { href: '/#como', rot: 'Como funciona' },
+  { href: '/privacidade', rot: 'Privacidade' },
+  { href: '/#contacto', rot: 'Contacto' },
+];
 ---
-<header class="site">
+<header class="site" data-site-header>
   <div class="container site-barra">
-    <a class="site-marca" href="/"><img src="/logo.png" alt="" width="44" height="44" /><span>Expo Connect <b>Angola</b></span></a>
-    <nav aria-label="Site" class="site-nav">
-      <a href="/#missao">Missão</a>
-      <a href="/#como">Como funciona</a>
-      <a href="/privacidade">Privacidade</a>
-      <a href="/#contacto">Contacto</a>
+    <a class="site-marca" href="/" aria-label="Expo Connect Angola — início">
+      <img class="logo-img" src="/logo.png" alt="" width="40" height="40" />
+      <span>Expo Connect</span>
+    </a>
+    <nav aria-label="Site" class="site-nav" id="site-nav" data-aberto="false">
+      <ul>{LINKS.map((l) => <li><a href={l.href}>{l.rot}</a></li>)}</ul>
+      <div class="site-nav-a11y"><A11y /></div>
     </nav>
     <div class="site-accoes">
-      <A11y />
-      <a class="btn btn--sm" href="/app">{user ? 'Abrir plataforma' : 'Entrar'}</a>
+      <a class="btn site-cta" href="/app">{user ? 'Abrir plataforma' : 'Entrar'}</a>
+      <button type="button" class="site-menu" aria-controls="site-nav" aria-expanded="false">
+        <span class="sr-only">Menu</span><span aria-hidden="true" class="site-menu-ic"></span>
+      </button>
     </div>
   </div>
 </header>
 
+<script>
+  function iniciarCabecalho() {
+    const h = document.querySelector<HTMLElement>('[data-site-header]');
+    if (!h || h.dataset.ligado) return;
+    h.dataset.ligado = '1';
+    const fundo = () => h.classList.toggle('site--fundo', scrollY > 8);
+    fundo();
+    addEventListener('scroll', fundo, { passive: true });
+    const btn = h.querySelector<HTMLButtonElement>('.site-menu')!;
+    const nav = h.querySelector<HTMLElement>('#site-nav')!;
+    const definir = (aberto: boolean) => {
+      nav.dataset.aberto = String(aberto);
+      btn.setAttribute('aria-expanded', String(aberto));
+      document.body.style.overflow = aberto ? 'hidden' : '';
+    };
+    btn.addEventListener('click', () => definir(nav.dataset.aberto !== 'true'));
+    nav.addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('a')) definir(false); });
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && nav.dataset.aberto === 'true') { definir(false); btn.focus(); } });
+  }
+  iniciarCabecalho();
+  document.addEventListener('astro:page-load', iniciarCabecalho);
+</script>
+
 <style>
-  .site { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
-  .site-barra { display: flex; align-items: center; gap: 1.25rem; padding: .7rem 0; flex-wrap: wrap; }
-  .site-marca { display: flex; align-items: center; gap: .6rem; color: var(--text); text-decoration: none; font-weight: 700; font-size: 1.1rem; }
-  .site-marca img { border-radius: 10px; }
-  .site-marca b { color: var(--accent-2); font-weight: 800; }
-  .site-nav { display: flex; gap: 1.1rem; }
-  .site-nav a { color: var(--text-2); text-decoration: none; font-weight: 600; font-size: .93rem; }
-  .site-nav a:hover { color: var(--text); text-decoration: underline; }
-  .site-accoes { margin-left: auto; display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
-  @media (max-width: 860px) { .site-nav { order: 3; width: 100%; overflow-x: auto; padding-bottom: .2rem; } }
+  .site { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid transparent; transition: border-color .4s, background-color .4s; }
+  .site::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; transition: backdrop-filter .4s; }
+  .site.site--fundo { border-bottom-color: var(--border); background: color-mix(in srgb, var(--bg) 78%, transparent); }
+  .site.site--fundo::after { -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  .site-barra { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; height: var(--header-h); }
+  .site-marca { display: flex; align-items: center; gap: .625rem; color: var(--text); text-decoration: none; font: var(--t-h6); letter-spacing: -.01em; flex: none; }
+  .site-marca img { border-radius: var(--radius-sm); }
+  .site-nav ul { display: flex; gap: 2rem; list-style: none; margin: 0; padding: 0; }
+  .site-nav a { color: var(--text); text-decoration: none; font: var(--t-body-2); font-weight: 500; transition: color .2s; }
+  .site-nav a:hover { color: var(--link); }
+  .site-nav-a11y { display: none; }
+  .site-accoes { display: flex; align-items: center; gap: .75rem; }
+  .site-menu { display: none; width: 48px; height: 48px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; }
+  .site-menu-ic, .site-menu-ic::before, .site-menu-ic::after { display: block; width: 18px; height: 2px; margin: auto; background: currentColor; border-radius: 2px; position: relative; transition: transform .2s; }
+  .site-menu-ic::before, .site-menu-ic::after { content: ''; position: absolute; left: 0; }
+  .site-menu-ic::before { top: -6px; } .site-menu-ic::after { top: 6px; }
+  .site-menu[aria-expanded="true"] .site-menu-ic { background: transparent; }
+  .site-menu[aria-expanded="true"] .site-menu-ic::before { transform: translateY(6px) rotate(45deg); }
+  .site-menu[aria-expanded="true"] .site-menu-ic::after { transform: translateY(-6px) rotate(-45deg); }
+
+  @media (max-width: 990px) {
+    .site-menu { display: inline-block; }
+    .site-nav { position: fixed; inset: var(--header-h) 0 0 0; background: var(--bg); padding: 1.5rem 16px 2rem; display: none;
+      flex-direction: column; gap: 2rem; overflow-y: auto; border-top: 1px solid var(--border); }
+    .site-nav[data-aberto="true"] { display: flex; }
+    .site-nav ul { flex-direction: column; gap: 0; }
+    .site-nav li a { display: block; padding: 1rem 0; font: var(--t-h6); border-bottom: 1px solid var(--border); }
+    .site-nav-a11y { display: block; }
+  }
+  @media (max-width: 420px) { .site-cta { padding: 0 1rem; } .site-marca span { display: none; } }
 </style>

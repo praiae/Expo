@@ -4,6 +4,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import { db } from '../lib/db.js';
 import { fmt } from '../lib/estatisticas.js';
+import { PROVINCIAS } from '../lib/constantes.js';
 
 // Formulário de contacto (com campo "armadilha" contra robôs e limite de tamanho).
 let enviado = false;
@@ -26,72 +27,229 @@ if (Astro.request.method === 'POST') {
 }
 
 // Números públicos: apenas agregados de registos validados.
-const n = await db.get(`SELECT COUNT(*) total, COUNT(DISTINCT provincia) provincias,
-  COUNT(*) FILTER (WHERE cadeira_manual + cadeira_eletrica + oculos_inteligentes + adaptacao_automovel + manutencao > 0) procura
-  FROM v_pessoas WHERE estado = 'validado'`);
+const [n, porProv, prio] = await Promise.all([
+  db.get(`SELECT COUNT(*) total, COUNT(DISTINCT provincia) provincias,
+    COUNT(*) FILTER (WHERE cadeira_manual + cadeira_eletrica + oculos_inteligentes + adaptacao_automovel + manutencao > 0) procura
+    FROM v_pessoas WHERE estado = 'validado'`),
+  db.all("SELECT provincia k, COUNT(*) n FROM v_pessoas WHERE estado = 'validado' GROUP BY 1"),
+  db.all("SELECT prioridade k, COUNT(*) n FROM v_pessoas WHERE estado = 'validado' GROUP BY 1"),
+]);
+const prov = new Map(porProv.map((r) => [r.k, r.n]));
+const maxProv = Math.max(0, ...porProv.map((r) => r.n));
+const nivel = (x: number) => (!x || !maxProv ? 0 : Math.min(5, 1 + Math.floor((x / maxProv) * 4.999)));
+const pr = (k: number) => prio.find((r) => r.k === k)?.n || 0;
+const totalPrio = Math.max(1, pr(1) + pr(2) + pr(3));
+const NIVEIS_PRIO = [
+  { k: 1, rot: 'Urgente', c: 'p1' },
+  { k: 2, rot: 'Moderada', c: 'p2' },
+  { k: 3, rot: 'Preventiva', c: 'p3' },
+];
+
+const MODULOS = [
+  { id: 'registo', tema: 'Recolha de dados', titulo: 'Registo de beneficiários',
+    texto: 'Formulário único para identificação, condição, funcionalidade, situação socioeconómica e procura. Dados parciais ficam sinalizados para completar mais tarde.' },
+  { id: 'prioridade', tema: 'Atendimento', titulo: 'Classificação de prioridade',
+    texto: 'Cada registo recebe automaticamente uma prioridade — urgente, moderada ou preventiva — com os factores que a justificam, segundo pesos configuráveis.' },
+  { id: 'estatistica', tema: 'Análise', titulo: 'Estatística territorial',
+    texto: 'Indicadores por província, município, categoria, idade e rendimento, calculados apenas sobre registos validados e exportáveis para Excel.' },
+  { id: 'procura', tema: 'Produção', titulo: 'Procura de produtos de apoio',
+    texto: 'Cadeiras de rodas, óculos inteligentes, adaptações automóveis e manutenção: a procura real e a capacidade de compra orientam a produção.' },
+];
+const PROCURA_DEMO = [
+  { rot: 'Cadeira manual', w: 86 },
+  { rot: 'Óculos inteligentes', w: 54 },
+  { rot: 'Manutenção', w: 41 },
+  { rot: 'Cadeira eléctrica', w: 28 },
+];
+const FUNCIONALIDADES = [
+  { tag: 'Segurança', titulo: 'Dados sensíveis encriptados', texto: 'BI, telefone, e-mail e morada são guardados com encriptação AES-256. O BI é pesquisável sem nunca ficar em claro.', ic: 'cadeado' },
+  { tag: 'Controlo', titulo: 'Perfis de acesso', texto: 'Técnicos, analistas, gestores e beneficiários vêem apenas o que a sua função exige.', ic: 'pessoas' },
+  { tag: 'Transparência', titulo: 'Auditoria completa', texto: 'Cada consulta de dados pessoais, exportação e alteração fica registada com autor, data e origem.', ic: 'lista' },
+  { tag: 'Relatórios', titulo: 'Exportação para Excel', texto: 'Estatísticas agregadas e microdados anonimizados para análise; listas identificadas só para quem tem autorização.', ic: 'tabela' },
+  { tag: 'Inclusão', titulo: 'Acessível por desenho', texto: 'Alto contraste, texto maior, tema escuro, navegação por teclado e leitores de ecrã em toda a plataforma.', ic: 'olho' },
+  { tag: 'Terreno', titulo: 'Funciona no telemóvel', texto: 'Pensada para o registo no terreno, em qualquer ecrã, com ligações lentas e formulários simples.', ic: 'telemovel' },
+];
+const PASSOS = [
+  { titulo: 'Registo no terreno', texto: 'Técnicos credenciados recolhem os dados com consentimento informado do beneficiário.' },
+  { titulo: 'Validação', texto: 'Cada registo é revisto e completado antes de entrar nas estatísticas oficiais.' },
+  { titulo: 'Classificação', texto: 'O sistema atribui a prioridade de atendimento e explica os factores que pesaram.' },
+  { titulo: 'Análise e acção', texto: 'Gestores e parceiros recebem relatórios agregados para planear apoio e produção.' },
+];
 ---
 <Base title="Expo Connect Angola — Acessibilidade e inclusão com dados">
   <SiteHeader />
   <main id="conteudo">
-    <section class="heroi">
-      <div class="container heroi-grelha">
-        <div>
-          <span class="eyebrow">Plataforma nacional de acessibilidade</span>
-          <h1>Conhecer quem precisa, para chegar primeiro a quem mais precisa.</h1>
-          <p class="lead">A Expo Connect Angola regista e analisa as necessidades de pessoas com deficiência, idosos e pessoas com mobilidade
-            reduzida em todas as províncias — para orientar apoio, produção de produtos de apoio e políticas públicas.</p>
-          <div class="linha">
+    <!-- Ecrã inicial -->
+    <section class="inicio">
+      <svg class="inicio-fundo" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1600 900">
+        <defs>
+          <pattern id="linhas" width="120" height="69.28" patternUnits="userSpaceOnUse">
+            <path d="M0 69.28 L120 0 M-60 34.64 L60 -34.64 M60 103.92 L180 34.64" stroke="currentColor" fill="none" />
+            <path d="M0 0 L120 69.28 M-60 34.64 L60 103.92 M60 -34.64 L180 34.64" stroke="currentColor" fill="none" />
+          </pattern>
+          <linearGradient id="desvanecer" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#fff" /><stop offset=".55" stop-color="#fff" /><stop offset="1" stop-color="#fff" stop-opacity="0" />
+          </linearGradient>
+          <mask id="mascara"><rect width="1600" height="900" fill="url(#desvanecer)" /></mask>
+        </defs>
+        <rect width="1600" height="900" fill="url(#linhas)" mask="url(#mascara)" />
+      </svg>
+      <div class="container inicio-grelha">
+        <div class="inicio-texto">
+          <p class="topic anim" style="--d:0s">Acessibilidade e inclusão em Angola</p>
+          <h1 class="inicio-titulo anim" style="--d:.1s">Conhecer quem precisa para chegar primeiro a quem mais precisa</h1>
+          <p class="inicio-desc anim" style="--d:.2s">A Expo Connect Angola regista e analisa as necessidades de pessoas com deficiência, idosos e pessoas com
+            mobilidade reduzida nas 21 províncias — para orientar o apoio, a produção de produtos de apoio e as políticas públicas.</p>
+          <div class="inicio-accoes anim" style="--d:.3s">
             <a class="btn" href="#contacto">Fale connosco</a>
-            <a class="btn btn--ghost" href="#como">Como funciona</a>
+            <a class="btn btn--ghost" href="#modulos">Conhecer a plataforma</a>
           </div>
         </div>
-        <img class="heroi-logo" src="/logo.png" alt="Logótipo da Expo Connect Angola" width="360" height="360" />
+
+        <figure class="painel-demo anim" style="--d:.4s">
+          <div class="pd-cab" aria-hidden="true"><span class="pd-ponto"></span><span class="pd-ponto"></span><span class="pd-ponto"></span><span class="pd-tit">Painel nacional</span></div>
+          <div class="pd-kpis">
+            <div><p class="pd-rot">Beneficiários</p><p class="pd-val">{fmt(n.total)}</p></div>
+            <div><p class="pd-rot">Províncias</p><p class="pd-val">{fmt(n.provincias)}</p></div>
+            <div><p class="pd-rot">Pedidos de apoio</p><p class="pd-val">{fmt(n.procura)}</p></div>
+          </div>
+          <div class="pd-corpo">
+            <ul class="pd-mapa" aria-label="Registos por província">
+              {PROVINCIAS.map((p) => (
+                <li style={`grid-column:${p.x + 1};grid-row:${p.y + 1};background:var(--seq-${nivel(prov.get(p.nome) || 0)})`}
+                  title={`${p.nome}: ${prov.get(p.nome) || 0}`}><span class="sr-only">{p.nome}: {prov.get(p.nome) || 0}</span></li>
+              ))}
+            </ul>
+            <div class="pd-prio">
+              <p class="pd-rot">Prioridade de atendimento</p>
+              {NIVEIS_PRIO.map((x) => (
+                <div class="pd-linha">
+                  <span class={`tag ${x.c}`}>{x.rot}</span>
+                  <span class="pd-barra" aria-hidden="true"><span style={`width:${(pr(x.k) / totalPrio) * 100}%;background:var(--${x.c})`}></span></span>
+                  <span class="pd-num">{fmt(pr(x.k))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <figcaption class="sr-only">Indicadores agregados de registos validados; nenhum dado pessoal é mostrado.</figcaption>
+        </figure>
       </div>
     </section>
 
-    <section class="container numeros" aria-label="Números da plataforma">
-      <div><strong>{fmt(n.total)}</strong><span>pessoas registadas e validadas</span></div>
-      <div><strong>{fmt(n.provincias)}</strong><span>províncias com registos</span></div>
-      <div><strong>{fmt(n.procura)}</strong><span>pedidos de produtos de apoio</span></div>
-    </section>
-
-    <section id="missao" class="container bloco">
-      <span class="eyebrow">Missão</span>
-      <h2>Dados fiáveis ao serviço da inclusão</h2>
-      <div class="cartoes">
-        <article class="card"><h3>Estatística</h3><p>Quantas pessoas cegas, cadeirantes, idosas ou com mobilidade reduzida existem em cada província e município, e de que precisam.</p></article>
-        <article class="card"><h3>Prioridade</h3><p>Uma classificação transparente identifica os casos urgentes — quem não sai de casa sem ajuda, quem precisa de apoio permanente.</p></article>
-        <article class="card"><h3>Procura</h3><p>Cadeiras de rodas, óculos inteligentes, adaptações automóveis e manutenção: a procura real orienta a produção e a distribuição.</p></article>
+    <!-- Módulos -->
+    <section id="modulos" class="seccao container" aria-labelledby="t-modulos">
+      <div class="seccao-cab" data-revelar>
+        <p class="topic">Módulos da plataforma</p>
+        <h2 class="seccao-tit" id="t-modulos">Do primeiro registo à decisão informada</h2>
+      </div>
+      <div class="modulos">
+        {MODULOS.map((m) => (
+          <article class="modulo" data-revelar>
+            <div class="modulo-texto">
+              <p class="modulo-tema">{m.tema}</p>
+              <h3 class="modulo-tit">{m.titulo}</h3>
+              <p class="modulo-desc">{m.texto}</p>
+            </div>
+            <div class="modulo-ilus" aria-hidden="true">
+              {m.id === 'registo' && (
+                <div class="ilus-form">
+                  <span class="if-rot"></span><span class="if-campo"></span>
+                  <span class="if-rot"></span><span class="if-campo"></span>
+                  <span class="if-checks"><i class="on"></i><i></i><i class="on"></i></span>
+                  <span class="if-btn"></span>
+                </div>
+              )}
+              {m.id === 'prioridade' && (
+                <div class="ilus-fila">
+                  <span class="tag p1">P1 · 12 pontos</span><span class="tag p1">P1 · 10 pontos</span>
+                  <span class="tag p2">P2 · 7 pontos</span><span class="tag p3">P3 · 3 pontos</span>
+                </div>
+              )}
+              {m.id === 'estatistica' && (
+                <div class="ilus-colunas">{[38, 62, 45, 80, 56, 92, 70].map((h) => <span style={`height:${h}%`}></span>)}</div>
+              )}
+              {m.id === 'procura' && (
+                <div class="ilus-procura">
+                  {PROCURA_DEMO.map((x) => (
+                    <div><span class="ip-rot">{x.rot}</span><span class="ip-barra"><span style={`width:${x.w}%`}></span></span></div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </article>
+        ))}
       </div>
     </section>
 
-    <section id="como" class="container bloco">
-      <span class="eyebrow">Como funciona</span>
-      <h2>Do registo à resposta</h2>
+    <!-- Funcionalidades -->
+    <section id="funcionalidades" class="seccao container" aria-labelledby="t-funcs">
+      <div class="seccao-cab" data-revelar>
+        <p class="topic">Funcionalidades</p>
+        <h2 class="seccao-tit" id="t-funcs">Construída para proteger quem regista e quem é registado</h2>
+      </div>
+      <div class="funcs">
+        {FUNCIONALIDADES.map((f) => (
+          <article class="func" data-revelar>
+            <div class="func-cab">
+              <span class="func-ic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  {f.ic === 'cadeado' && <><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>}
+                  {f.ic === 'pessoas' && <><circle cx="9" cy="8" r="3.2" /><path d="M3 20c.6-3.4 3-5.5 6-5.5s5.4 2.1 6 5.5" /><circle cx="17" cy="9" r="2.4" /><path d="M16.5 14.6c2.3.3 3.9 2 4.5 4.9" /></>}
+                  {f.ic === 'lista' && <><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.5" cy="6" r="1" /><circle cx="4.5" cy="12" r="1" /><circle cx="4.5" cy="18" r="1" /></>}
+                  {f.ic === 'tabela' && <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18M3 15h18M10 4v16" /></>}
+                  {f.ic === 'olho' && <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>}
+                  {f.ic === 'telemovel' && <><rect x="7" y="2.5" width="10" height="19" rx="2" /><path d="M11 18.5h2" /></>}
+                </svg>
+              </span>
+              <p class="func-tag">{f.tag}</p>
+            </div>
+            <h3 class="func-tit">{f.titulo}</h3>
+            <p class="func-desc">{f.texto}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+
+    <!-- Como funciona -->
+    <section id="como" class="seccao container" aria-labelledby="t-como">
+      <div class="como-painel" data-revelar>
+        <div>
+          <p class="topic">Como funciona</p>
+          <h2 class="como-tit" id="t-como">Do registo à resposta, em quatro passos</h2>
+          <p class="como-desc">Um processo simples e verificável, do contacto no terreno ao relatório que orienta a decisão.</p>
+        </div>
+        <a class="btn" href="#contacto">Fale connosco</a>
+      </div>
       <ol class="passos">
-        <li><strong>Registo no terreno.</strong> Técnicos credenciados recolhem os dados com consentimento informado.</li>
-        <li><strong>Validação.</strong> Cada registo é revisto antes de entrar nas estatísticas.</li>
-        <li><strong>Classificação.</strong> O sistema atribui automaticamente a prioridade de atendimento.</li>
-        <li><strong>Análise e acção.</strong> Gestores e parceiros recebem relatórios agregados para planear o apoio.</li>
+        {PASSOS.map((p, i) => (
+          <li class="passo" data-revelar>
+            <span class="passo-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+            <h3 class="passo-tit">{p.titulo}</h3>
+            <p class="passo-desc">{p.texto}</p>
+          </li>
+        ))}
       </ol>
     </section>
 
-    <section id="contacto" class="container bloco">
-      <div class="contacto card">
-        <div>
-          <span class="eyebrow">Contacto</span>
-          <h2>Quer registar-se, ser parceiro ou pedir informação?</h2>
-          <p>Escreva-nos. Respondemos a beneficiários, famílias, associações, instituições públicas e empresas.</p>
-          <p class="hint">Não envie dados de saúde por este formulário. Ver a <a href="/privacidade">política de privacidade</a>.</p>
+    <!-- Contacto -->
+    <section id="contacto" class="seccao container" aria-labelledby="t-contacto">
+      <div class="contacto" data-revelar>
+        <div class="contacto-texto">
+          <p class="topic">Contacto</p>
+          <h2 class="como-tit" id="t-contacto">Quer registar-se, ser parceiro ou pedir informação?</h2>
+          <p class="como-desc">Respondemos a beneficiários, famílias, associações, instituições públicas e empresas.</p>
+          <p class="hint aviso-saude">Não envie dados de saúde por este formulário. Consulte a <a href="/privacidade">política de privacidade</a>.</p>
         </div>
         {enviado ? (
-          <div class="alerta alerta--ok" role="status">Obrigado! A sua mensagem foi recebida.</div>
+          <div class="alerta alerta--ok contacto-ok" role="status"><strong>Obrigado!</strong> A sua mensagem foi recebida. Entraremos em contacto em breve.</div>
         ) : (
-          <form method="post" action="/#contacto" class="stack">
+          <form method="post" action="/#contacto" class="contacto-form">
             {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
-            <label class="field"><span>Nome</span><input type="text" name="nome" value={v.nome} autocomplete="name" /></label>
+            <div class="cf-linha">
+              <label class="field"><span>Nome</span><input type="text" name="nome" value={v.nome} autocomplete="name" /></label>
+              <label class="field"><span>Organização</span><input type="text" name="organizacao" value={v.organizacao} autocomplete="organization" /></label>
+            </div>
             <label class="field"><span>E-mail *</span><input type="email" name="email" value={v.email} autocomplete="email" required /></label>
-            <label class="field"><span>Organização</span><input type="text" name="organizacao" value={v.organizacao} autocomplete="organization" /></label>
             <label class="field"><span>Mensagem *</span><textarea name="mensagem" rows="4" required minlength="10">{v.mensagem}</textarea></label>
             <label class="armadilha" aria-hidden="true">Website<input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
             <button class="btn" type="submit">Enviar mensagem</button>
@@ -103,33 +261,147 @@ const n = await db.get(`SELECT COUNT(*) total, COUNT(DISTINCT provincia) provinc
   <SiteFooter />
 </Base>
 
+<script>
+  // Revela secções ao entrar no ecrã. Sem JS (ou com movimento reduzido) tudo fica visível.
+  function revelar() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver((entradas) => {
+      for (const e of entradas) if (e.isIntersecting) { e.target.classList.add('revelado'); io.unobserve(e.target); }
+    }, { rootMargin: '0px 0px -10% 0px' });
+    document.querySelectorAll<HTMLElement>('[data-revelar]:not(.por-revelar)').forEach((el) => {
+      if (el.getBoundingClientRect().top < innerHeight) return;
+      el.classList.add('por-revelar');
+      io.observe(el);
+    });
+  }
+  revelar();
+  document.addEventListener('astro:page-load', revelar);
+</script>
+
 <style>
-  .heroi { background: linear-gradient(180deg, var(--brand-soft), var(--bg)); padding: 4rem 0 3rem; }
-  .heroi-grelha { display: grid; grid-template-columns: 1.3fr 1fr; gap: 2rem; align-items: center; }
-  .heroi h1 { font-size: clamp(2rem, 4.5vw, 3.25rem); font-weight: 800; letter-spacing: -.025em; }
-  .lead { font-size: 1.15rem; color: var(--text-2); max-width: 60ch; }
-  .linha { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.5rem; }
-  .heroi-logo { justify-self: center; border-radius: 32px; box-shadow: var(--shadow); width: min(360px, 100%); height: auto; }
-  .numeros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: -1.5rem; }
-  .numeros div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); }
-  .numeros strong { display: block; font-size: 2.2rem; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
-  .numeros span { color: var(--muted); font-weight: 600; }
-  .bloco { padding-top: 4rem; }
-  .bloco h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); margin-bottom: 1.25rem; }
-  .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
-  .cartoes h3 { font-size: 1.15rem; }
-  .cartoes p { color: var(--text-2); margin: 0; }
-  .passos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; padding: 0; list-style: none; counter-reset: p; }
-  .passos li { counter-increment: p; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
-  .passos li::before { content: counter(p); display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
-    background: var(--brand); color: var(--brand-ink); font-weight: 800; margin-bottom: .75rem; }
-  .contacto { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 2rem; }
+  /* Ecrã inicial */
+  .inicio { position: relative; margin-top: calc(var(--header-h) * -1); padding-top: var(--header-h); overflow: hidden; isolation: isolate; }
+  .inicio-fundo { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; color: var(--border); }
+  .inicio-grelha { display: grid; grid-template-columns: 1.05fr 1fr; gap: 3rem; align-items: center; min-height: min(72vh, 760px); padding: 7rem 0 6rem; }
+  .inicio-titulo { margin: 1.5rem 0 0; font: var(--t-h2); font-size: clamp(2rem, 4vw, 3rem); text-transform: uppercase; letter-spacing: .005em; text-wrap: balance; }
+  .inicio-desc { margin: 1rem 0 0; color: var(--text-2); font: var(--t-body-1); font-size: 1.0625rem; max-width: 52ch; text-wrap: pretty; }
+  .inicio-accoes { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2.5rem; }
+  .anim { animation: subir .7s var(--d, 0s) cubic-bezier(.2, .7, .2, 1) both; }
+  @keyframes subir { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
+  /* Painel de demonstração (dados reais agregados) */
+  .painel-demo { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1rem 1.25rem;
+    box-shadow: 0 30px 60px -30px rgb(20 40 90 / .25); }
+  .pd-cab { display: flex; align-items: center; gap: 6px; padding: 0 .25rem .875rem; border-bottom: 1px solid var(--border); }
+  .pd-ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--surface-2); }
+  .pd-tit { margin-left: .5rem; font: var(--t-title-2); }
+  .pd-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-top: 1rem; }
+  .pd-kpis > div { background: var(--bg); border-radius: var(--radius-md); padding: .75rem .875rem; }
+  .pd-rot { margin: 0; color: var(--text-2); font: var(--t-body-3); }
+  .pd-val { margin: .125rem 0 0; font: var(--t-h5); font-variant-numeric: tabular-nums; }
+  .pd-corpo { display: grid; grid-template-columns: 150px 1fr; gap: 1.25rem; margin-top: 1rem; align-items: center; }
+  .pd-mapa { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 22px; gap: 3px; }
+  .pd-mapa li { border-radius: 4px; border: 1px solid var(--border); }
+  .pd-prio { display: grid; gap: .625rem; }
+  .pd-linha { display: grid; grid-template-columns: 112px 1fr auto; align-items: center; gap: .625rem; }
+  .pd-barra { height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+  .pd-barra span { display: block; height: 100%; border-radius: 4px; }
+  .pd-num { font: var(--t-title-2); font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+
+  /* Secções */
+  .seccao { padding-top: var(--section-space); }
+  .seccao-cab { text-align: center; max-width: 820px; margin: 0 auto; }
+  .seccao-tit { margin: 0; font: var(--t-h3); font-size: clamp(1.75rem, 3.2vw, 2.25rem); text-wrap: balance; }
+
+  /* Módulos */
+  .modulos { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 2.5rem; }
+  .modulo { display: grid; grid-template-columns: 3fr 2fr; gap: 1rem; min-height: 340px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; transition: border-color .2s ease-in-out; }
+  .modulo:hover { border-color: var(--primary); }
+  .modulo-texto { padding: 2rem 0 2rem 1.5rem; }
+  .modulo-tema { margin: 0; color: var(--text-2); font: var(--t-body-3); text-transform: uppercase; letter-spacing: .04em; }
+  .modulo-tit { margin: 1rem 0 0; font: var(--t-h5); }
+  .modulo-desc { margin: .75rem 0 0; color: var(--text-2); font: var(--t-body-2); }
+  .modulo-ilus { display: flex; align-items: center; justify-content: center; padding: 1.5rem 1.5rem 1.5rem 0; }
+
+  .ilus-form { width: 100%; display: grid; gap: 8px; padding: 1rem; background: var(--bg); border-radius: var(--radius-md); }
+  .if-rot { width: 45%; height: 6px; border-radius: 3px; background: var(--surface-2); }
+  .if-campo { height: 28px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); }
+  .if-checks { display: flex; gap: 6px; margin-top: 4px; }
+  .if-checks i { width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border-strong); }
+  .if-checks i.on { background: var(--primary); border-color: var(--primary); }
+  .if-btn { width: 55%; height: 28px; border-radius: 8px; background: var(--primary); margin-top: 6px; }
+  .ilus-fila { display: grid; gap: 10px; justify-items: start; }
+  .ilus-fila .tag { font-size: .8125rem; padding: .375rem .75rem; box-shadow: 0 8px 20px -12px rgb(0 0 0 / .3); }
+  .ilus-fila .tag:nth-child(2) { margin-left: 18px; } .ilus-fila .tag:nth-child(3) { margin-left: 36px; } .ilus-fila .tag:nth-child(4) { margin-left: 54px; }
+  .ilus-colunas { width: 100%; height: 170px; display: flex; align-items: flex-end; gap: 8px; padding: 1rem; background: var(--bg); border-radius: var(--radius-md); }
+  .ilus-colunas span { flex: 1; border-radius: 4px 4px 0 0; background: linear-gradient(180deg, var(--seq-3), var(--seq-2)); }
+  .ilus-procura { width: 100%; display: grid; gap: 12px; padding: 1rem; background: var(--bg); border-radius: var(--radius-md); }
+  .ilus-procura div { display: grid; gap: 5px; }
+  .ip-rot { font: var(--t-body-3); color: var(--text-2); }
+  .ip-barra { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+  .ip-barra span { display: block; height: 100%; border-radius: 4px; background: var(--series-2); }
+
+  /* Funcionalidades */
+  .funcs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2.5rem; }
+  .func { background: var(--surface-feature); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem 1.5rem;
+    transition: background-color .2s ease-in-out, color .2s ease-in-out; }
+  .func:hover { background: var(--primary); color: #fff; }
+  .func:hover .func-tag, .func:hover .func-desc { color: rgb(255 255 255 / .88); }
+  .func:hover .func-ic { background: rgb(255 255 255 / .16); color: #fff; }
+  .func-cab { display: flex; align-items: center; gap: .75rem; }
+  .func-ic { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--radius-md); background: var(--surface); color: var(--topic);
+    transition: background-color .2s, color .2s; }
+  .func-tag { margin: 0; color: var(--text-2); font: var(--t-body-3); text-transform: uppercase; letter-spacing: .04em; transition: color .2s; }
+  .func-tit { margin: 1.25rem 0 .5rem; font: var(--t-h6); }
+  .func-desc { margin: 0; color: var(--text-2); font: var(--t-body-2); transition: color .2s; }
+  :root[data-contrast="alto"] .func:hover { background: var(--surface); color: var(--text); outline: 3px solid var(--text); }
+  :root[data-contrast="alto"] .func:hover .func-tag, :root[data-contrast="alto"] .func:hover .func-desc { color: var(--text); }
+
+  /* Como funciona */
+  .como-painel { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem 3rem; flex-wrap: wrap; }
+  .como-tit { margin: 0; font: var(--t-h4); font-size: clamp(1.5rem, 2.6vw, 1.75rem); max-width: 24ch; text-wrap: balance; }
+  .como-desc { margin: .75rem 0 0; color: var(--text-2); font: var(--t-body-2); max-width: 56ch; }
+  .passos { list-style: none; padding: 0; margin: 2.5rem 0 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+  .passo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem 1.5rem 2.5rem; }
+  .passo-num { display: inline-grid; place-items: center; min-width: 44px; height: 32px; padding: 0 .625rem; border-radius: var(--radius-sm);
+    background: var(--brand-soft); color: var(--topic); font: var(--t-title-2); font-variant-numeric: tabular-nums; }
+  .passo-tit { margin: 1.5rem 0 .5rem; font: var(--t-h6); }
+  .passo-desc { margin: 0; color: var(--text-2); font: var(--t-body-2); }
+
+  /* Contacto */
+  .contacto { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem 4rem; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 2.5rem; }
+  .aviso-saude { margin-top: 1.5rem; }
+  .contacto-form { display: grid; gap: 1rem; }
+  .contacto-form .btn { justify-self: start; }
+  .cf-linha { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .contacto-ok { align-self: center; }
   .armadilha { position: absolute; left: -9999px; }
-  @media (max-width: 760px) {
-    .heroi { padding-top: 2.5rem; }
-    .heroi-grelha, .contacto { grid-template-columns: 1fr; }
-    .heroi-logo { width: 200px; grid-row: 1; }
-    .numeros { grid-template-columns: 1fr; margin-top: 1rem; }
-    .contacto { padding: 1.25rem; }
+
+  /* Revelação ao percorrer */
+  :global(.por-revelar) { opacity: 0; transform: translateY(32px); }
+  :global(.por-revelar.revelado) { opacity: 1; transform: none; transition: opacity .6s ease-out, transform .6s cubic-bezier(.2, .7, .2, 1); }
+
+  @media (max-width: 1100px) {
+    .modulos { grid-template-columns: 1fr; }
+    .funcs { grid-template-columns: repeat(2, 1fr); }
+    .passos { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 990px) {
+    .inicio-grelha { grid-template-columns: 1fr; padding: 4rem 0 3rem; min-height: 0; }
+    .seccao { padding-top: 96px; }
+  }
+  @media (max-width: 640px) {
+    .inicio-accoes .btn { flex: 1 1 100%; }
+    .modulo { grid-template-columns: 1fr; min-height: 0; }
+    .modulo-texto { padding: 1.5rem 1.25rem 0; }
+    .modulo-ilus { padding: 0 1.25rem 1.5rem; min-height: 180px; }
+    .funcs, .passos { grid-template-columns: 1fr; }
+    .pd-corpo { grid-template-columns: 1fr; }
+    .pd-mapa { max-width: 200px; }
+    .pd-linha { grid-template-columns: 96px 1fr auto; }
+    .contacto { grid-template-columns: 1fr; padding: 1.5rem 1.25rem; }
+    .cf-linha { grid-template-columns: 1fr; }
   }
 </style>

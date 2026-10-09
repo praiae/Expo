@@ -50,8 +50,11 @@
 
 <style>
   .a11y { display: flex; gap: .4rem; flex-wrap: wrap; }
-  .a11y-btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 36px; padding: .3rem .7rem; border-radius: 999px;
-    border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }
-  .a11y-btn[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+  .a11y-btn { display: inline-flex; align-items: center; gap: .375rem; min-height: 36px; padding: 0 .75rem; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong); background: transparent; color: var(--text); font: var(--t-body-3); font-weight: 500; cursor: pointer;
+    transition: border-color .2s, color .2s, background-color .2s; }
+  .a11y-btn:hover { border-color: var(--link); color: var(--link); }
+  .a11y-btn[aria-pressed="true"] { background: var(--primary); color: #fff; border-color: var(--primary); }
+  :root[data-contrast="alto"] .a11y-btn[aria-pressed="true"] { color: var(--brand-ink); }
   @media (max-width: 640px) { .a11y-rot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
 </style>
