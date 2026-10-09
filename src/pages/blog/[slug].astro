@@ -1,0 +1,195 @@
+---
+import Base from '../../layouts/Base.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import SiteFooter from '../../components/SiteFooter.astro';
+import ArtigoCartao from '../../components/ArtigoCartao.astro';
+import { render } from 'astro:content';
+import { artigosPublicados, tempoLeitura, dataLonga, dataIso, citacaoAPA } from '../../lib/artigos.js';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const artigos = await artigosPublicados();
+  return artigos.map((artigo) => ({ params: { slug: artigo.id }, props: { artigo, outros: artigos.filter((x) => x.id !== artigo.id).slice(0, 3) } }));
+}
+
+const { artigo, outros } = Astro.props;
+const a = artigo.data;
+const { Content, headings } = await render(artigo);
+const indice = headings.filter((h) => h.depth === 2 && h.slug !== 'footnote-label');
+const url = new URL(`/blog/${artigo.id}`, Astro.site ?? Astro.url.origin).href;
+const citacao = citacaoAPA(artigo, url);
+const minutos = tempoLeitura(artigo.body);
+const autores = a.autores.map((x) => x.nome).join(', ');
+
+// Dados estruturados (schema.org) para motores de busca e indexadores académicos.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'ScholarlyArticle',
+  headline: a.titulo,
+  alternativeHeadline: a.subtitulo,
+  abstract: a.resumo,
+  inLanguage: a.idioma,
+  datePublished: dataIso(a.data),
+  dateModified: dataIso(a.actualizado ?? a.data),
+  author: a.autores.map((x) => ({ '@type': 'Person', name: x.nome, ...(x.afiliacao ? { affiliation: x.afiliacao } : {}) })),
+  keywords: a.palavrasChave.join(', '),
+  publisher: { '@type': 'Organization', name: 'Expo Connect Angola' },
+  url,
+};
+---
+<Base title={`${a.titulo} · Expo Connect Angola`} description={a.resumo}>
+  <Fragment slot="head">
+    <meta property="og:type" content="article" />
+    <meta property="article:published_time" content={dataIso(a.data)} />
+    {a.autores.map((x) => <meta name="citation_author" content={x.nome} />)}
+    <meta name="citation_title" content={a.titulo} />
+    <meta name="citation_publication_date" content={dataIso(a.data).replace(/-/g, '/')} />
+    <meta name="citation_language" content={a.idioma} />
+    <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+  </Fragment>
+  <SiteHeader />
+  <main id="conteudo" class="container">
+    <nav class="migalhas no-print" aria-label="Localização">
+      <a href="/blog">← Blog</a>
+    </nav>
+
+    <article class="artigo" lang={a.idioma}>
+      <header class="art-cab">
+        <p class="topic">{a.categoria}</p>
+        <h1 class="art-tit">{a.titulo}</h1>
+        {a.subtitulo && <p class="art-sub">{a.subtitulo}</p>}
+        <p class="art-meta">
+          <span class="art-autores">{autores}</span>
+          <span aria-hidden="true">·</span>
+          <time datetime={dataIso(a.data)}>{dataLonga(a.data)}</time>
+          <span aria-hidden="true">·</span>
+          <span>{minutos} min de leitura</span>
+        </p>
+      </header>
+
+      <section class="resumo" aria-labelledby="t-resumo">
+        <h2 id="t-resumo" class="resumo-tit">Resumo</h2>
+        <p>{a.resumo}</p>
+        {a.palavrasChave.length > 0 && (
+          <p class="chaves"><span class="chaves-rot">Palavras-chave:</span> {a.palavrasChave.join('; ')}</p>
+        )}
+      </section>
+
+      <div class="art-corpo">
+        {indice.length > 2 && (
+          <nav class="indice no-print" aria-label="Índice do artigo">
+            <p class="indice-tit">Neste artigo</p>
+            <ol>{indice.map((h) => <li><a href={`#${h.slug}`}>{h.text}</a></li>)}</ol>
+          </nav>
+        )}
+        <div class="prosa">
+          <Content />
+
+          <section class="citar" aria-labelledby="t-citar">
+            <h2 id="t-citar">Como citar este artigo</h2>
+            <p class="citar-texto" id="citacao">{citacao}</p>
+            <button type="button" class="btn btn--ghost btn--sm no-print" data-copiar="citacao">Copiar citação</button>
+            <span class="citar-ok" role="status" aria-live="polite"></span>
+          </section>
+        </div>
+      </div>
+    </article>
+
+    {outros.length > 0 && (
+      <section class="mais no-print" aria-labelledby="t-mais">
+        <h2 id="t-mais" class="mais-tit">Mais artigos</h2>
+        <ul class="mais-grelha" role="list">{outros.map((o) => <li><ArtigoCartao artigo={o} nivel={3} /></li>)}</ul>
+      </section>
+    )}
+  </main>
+  <SiteFooter />
+</Base>
+
+<script>
+  function copiar() {
+    document.querySelectorAll<HTMLButtonElement>('[data-copiar]').forEach((b) => {
+      if (b.dataset.ligado) return;
+      b.dataset.ligado = '1';
+      b.addEventListener('click', async () => {
+        const texto = document.getElementById(b.dataset.copiar!)?.textContent?.trim() || '';
+        const estado = b.parentElement?.querySelector('.citar-ok');
+        try { await navigator.clipboard.writeText(texto); if (estado) estado.textContent = 'Citação copiada.'; }
+        catch { if (estado) estado.textContent = 'Não foi possível copiar. Seleccione o texto manualmente.'; }
+      });
+    });
+  }
+  copiar();
+  document.addEventListener('astro:page-load', copiar);
+</script>
+
+<style>
+  .migalhas { padding-top: 3rem; font: var(--t-body-2); }
+  .migalhas a { color: var(--text-2); text-decoration: none; font-weight: 500; }
+  .migalhas a:hover { color: var(--link); }
+
+  .art-cab { max-width: 880px; margin-top: 2rem; }
+  .art-tit { margin: 0; font: var(--t-h2); font-size: clamp(2rem, 4.2vw, 3rem); text-wrap: balance; }
+  .art-sub { margin: 1rem 0 0; font: var(--t-h6); font-weight: 400; font-size: 1.25rem; color: var(--text-2); text-wrap: balance; }
+  .art-meta { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.5rem 0 0; font: var(--t-body-2); color: var(--text-2); }
+  .art-autores { color: var(--text); font-weight: 500; }
+
+  .resumo { max-width: 880px; margin-top: 2.5rem; background: var(--surface-feature); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.75rem 1.5rem; }
+  .resumo-tit { margin: 0 0 .75rem; font: var(--t-topic); text-transform: uppercase; letter-spacing: .04em; color: var(--topic); }
+  .resumo p { margin: 0; font: var(--t-body-1); }
+  .chaves { margin-top: 1rem !important; font: var(--t-body-2) !important; color: var(--text-2); }
+  .chaves-rot { font-weight: 600; color: var(--text); }
+
+  .art-corpo { display: grid; grid-template-columns: 240px minmax(0, 720px); gap: 4rem; margin-top: 3.5rem; align-items: start; }
+  .indice { position: sticky; top: calc(var(--header-h) + 1.5rem); font: var(--t-body-2); }
+  .indice-tit { margin: 0 0 .75rem; font: var(--t-body-3); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2); }
+  .indice ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; border-left: 1px solid var(--border); }
+  .indice a { display: block; padding: .375rem 0 .375rem 1rem; margin-left: -1px; border-left: 2px solid transparent; color: var(--text-2); text-decoration: none; }
+  .indice a:hover { color: var(--link); border-left-color: var(--link); }
+
+  /* Texto do artigo */
+  .prosa { font-size: 1.0625rem; line-height: 1.7; }
+  .prosa :global(h2) { margin: 3rem 0 1rem; font: var(--t-h4); scroll-margin-top: calc(var(--header-h) + 1rem); }
+  .prosa :global(h3) { margin: 2.25rem 0 .75rem; font: var(--t-h6); font-size: 1.25rem; scroll-margin-top: calc(var(--header-h) + 1rem); }
+  .prosa > :global(:first-child) { margin-top: 0; }
+  .prosa :global(p) { margin: 0 0 1.25rem; }
+  .prosa :global(ul), .prosa :global(ol) { margin: 0 0 1.25rem; padding-left: 1.5rem; }
+  .prosa :global(li) { margin-bottom: .5rem; }
+  .prosa :global(li::marker) { color: var(--topic); }
+  .prosa :global(strong) { font-weight: 600; }
+  .prosa :global(blockquote) { margin: 2rem 0; padding: 1.25rem 1.5rem; background: var(--surface); border: 1px solid var(--border);
+    border-left: 3px solid var(--primary); border-radius: var(--radius-md); font-size: 1rem; }
+  .prosa :global(blockquote p:last-child) { margin-bottom: 0; }
+  .prosa :global(sup a) { text-decoration: none; font-weight: 600; padding: 0 .1em; }
+  .prosa :global(sup a::before) { content: '['; } .prosa :global(sup a::after) { content: ']'; }
+  /* Referências (notas de rodapé) */
+  .prosa :global(section.footnotes) { margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); font: var(--t-body-2); }
+  .prosa :global(section.footnotes h2) { margin-top: 0; font: var(--t-h5); }
+  /* O título das referências vem como "sr-only"; aqui deve ser visível. */
+  .prosa :global(#footnote-label) { position: static !important; width: auto; height: auto; margin: 0 0 1rem; overflow: visible; clip: auto; white-space: normal; }
+  .prosa :global(section.footnotes li) { margin-bottom: .75rem; color: var(--text-2); }
+  .prosa :global(section.footnotes li p) { margin: 0; display: inline; }
+  .prosa :global(.data-footnote-backref) { text-decoration: none; margin-left: .25rem; }
+
+  .citar { margin-top: 3rem; padding: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .citar h2 { margin: 0 0 .75rem !important; font: var(--t-h6) !important; }
+  .citar-texto { font: var(--t-body-2); color: var(--text-2); overflow-wrap: anywhere; }
+  .citar-ok { margin-left: .75rem; font: var(--t-body-3); color: var(--ok); }
+
+  .mais { margin-top: var(--section-space); }
+  .mais-tit { margin: 0; font: var(--t-h4); }
+  .mais-grelha { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+
+  @media (max-width: 1100px) {
+    .art-corpo { grid-template-columns: 1fr; gap: 2rem; }
+    .indice { position: static; }
+    .mais-grelha { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 640px) {
+    .migalhas { padding-top: 2rem; }
+    .prosa { font-size: 1rem; }
+    .resumo { padding: 1.5rem 1.25rem; }
+    .mais-grelha { grid-template-columns: 1fr; }
+  }
+  @media print { .art-corpo { display: block; } .resumo { background: none; } }
+</style>

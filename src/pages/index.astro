@@ -5,6 +5,8 @@ import SiteFooter from '../components/SiteFooter.astro';
 import { db } from '../lib/db.js';
 import { fmt } from '../lib/estatisticas.js';
 import { PROVINCIAS } from '../lib/constantes.js';
+import ArtigoCartao from '../components/ArtigoCartao.astro';
+import { artigosPublicados } from '../lib/artigos.js';
 
 // Formulário de contacto (com campo "armadilha" contra robôs e limite de tamanho).
 let enviado = false;
@@ -34,6 +36,7 @@ const [n, porProv, prio] = await Promise.all([
   db.all("SELECT provincia k, COUNT(*) n FROM v_pessoas WHERE estado = 'validado' GROUP BY 1"),
   db.all("SELECT prioridade k, COUNT(*) n FROM v_pessoas WHERE estado = 'validado' GROUP BY 1"),
 ]);
+const ultimosArtigos = (await artigosPublicados()).slice(0, 3);
 const prov = new Map(porProv.map((r) => [r.k, r.n]));
 const maxProv = Math.max(0, ...porProv.map((r) => r.n));
 const nivel = (x: number) => (!x || !maxProv ? 0 : Math.min(5, 1 + Math.floor((x / maxProv) * 4.999)));
@@ -231,6 +234,22 @@ const PASSOS = [
       </ol>
     </section>
 
+    <!-- Blog -->
+    {ultimosArtigos.length > 0 && (
+      <section id="blog" class="seccao container" aria-labelledby="t-blog">
+        <div class="como-painel" data-revelar>
+          <div>
+            <p class="topic">Blog científico</p>
+            <h2 class="como-tit" id="t-blog">Investigação e inovação ao serviço da inclusão</h2>
+          </div>
+          <a class="btn btn--ghost" href="/blog">Ver todos os artigos</a>
+        </div>
+        <ul class="artigos" role="list">
+          {ultimosArtigos.map((a) => <li data-revelar><ArtigoCartao artigo={a} nivel={3} /></li>)}
+        </ul>
+      </section>
+    )}
+
     <!-- Contacto -->
     <section id="contacto" class="seccao container" aria-labelledby="t-contacto">
       <div class="contacto" data-revelar>
@@ -368,6 +387,11 @@ const PASSOS = [
     background: var(--brand-soft); color: var(--topic); font: var(--t-title-2); font-variant-numeric: tabular-nums; }
   .passo-tit { margin: 1.5rem 0 .5rem; font: var(--t-h6); }
   .passo-desc { margin: 0; color: var(--text-2); font: var(--t-body-2); }
+
+  /* Blog */
+  .artigos { list-style: none; padding: 0; margin: 2.5rem 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+  @media (max-width: 1100px) { .artigos { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 640px) { .artigos { grid-template-columns: 1fr; } }
 
   /* Contacto */
   .contacto { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem 4rem; background: var(--surface); border: 1px solid var(--border);

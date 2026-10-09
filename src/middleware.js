@@ -19,6 +19,11 @@ const ROTAS = [
 ];
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
+  // Páginas pré-geradas no build (blog): não há pedido, cookies nem sessão.
+  if (ctx.isPrerendered) {
+    ctx.locals.user = null;
+    return next();
+  }
   const { pathname } = ctx.url;
   // Só consulta a base de dados quando existe cookie de sessão.
   const cookie = ctx.cookies.get(COOKIE_SESSAO)?.value;

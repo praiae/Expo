@@ -43,6 +43,35 @@ Não altere `0001_esquema_inicial.sql` depois de aplicada. Crie uma nova migraç
 (`netlify/database/migrations/0002_<descricao>.sql`) e reflicta a alteração em `src/lib/esquema.js`,
 que é usado pela base local.
 
+## Blog científico
+
+Os artigos são ficheiros Markdown em `src/content/artigos/`. Para publicar um novo, crie um ficheiro
+(o nome do ficheiro passa a ser o endereço, ex.: `meu-artigo.md` → `/blog/meu-artigo`) com este cabeçalho:
+
+```markdown
+---
+titulo: "Título do artigo"
+subtitulo: "Opcional"
+resumo: "Resumo de um parágrafo."
+autores:
+  - nome: "Nome do Autor"
+    afiliacao: "Opcional"
+data: 2026-10-09
+categoria: "Investigação"   # Investigação, Tecnologia, Política pública, Dados e estatística, Notícias
+palavrasChave: ["acessibilidade", "tecnologia"]
+idioma: "pt-PT"
+rascunho: false             # true esconde o artigo em produção
+---
+
+## 1. Introdução
+
+Texto com uma referência.[^ref1]
+
+[^ref1]: Autor, A. (2024). *Título da obra*. Editora.
+```
+
+As notas `[^...]` aparecem numeradas na secção «Referências». Depois de um `git push`, o Netlify publica o artigo.
+
 ## Perfis
 
 | Perfil | Acesso |

@@ -15,6 +15,7 @@
     "migracao": "node scripts/gerar-migracao.js"
   },
   "dependencies": {
+    "@astrojs/markdown-satteri": "0.4.3",
     "@astrojs/netlify": "8.2.9",
     "@netlify/database": "2.0.1",
     "astro": "7.3.8",

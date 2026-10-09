@@ -1,0 +1,37 @@
+---
+import { tempoLeitura, dataLonga, dataIso } from '../lib/artigos.js';
+interface Props { artigo: any; nivel?: 2 | 3; }
+const { artigo, nivel = 2 } = Astro.props;
+const a = artigo.data;
+const Titulo = `h${nivel}`;
+---
+<article class="cartao" data-categoria={a.categoria} lang={a.idioma}>
+  <div class="c-meta">
+    <span class="c-cat">{a.categoria}</span>
+    <time datetime={dataIso(a.data)}>{dataLonga(a.data)}</time>
+  </div>
+  <Titulo class="c-tit"><a href={`/blog/${artigo.id}`}>{a.titulo}</a></Titulo>
+  <p class="c-resumo">{a.resumo}</p>
+  <p class="c-rodape">
+    <span>{a.autores.map((x: any) => x.nome).join(', ')}</span>
+    <span aria-hidden="true">·</span>
+    <span>{tempoLeitura(artigo.body)} min de leitura</span>
+  </p>
+</article>
+
+<style>
+  .cartao { position: relative; display: flex; flex-direction: column; height: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 2rem 1.5rem 1.5rem; transition: border-color .2s ease-in-out; }
+  .cartao:hover, .cartao:focus-within { border-color: var(--primary); }
+  .c-meta { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; font: var(--t-body-3); color: var(--text-2); }
+  .c-cat { text-transform: uppercase; letter-spacing: .04em; color: var(--topic); font-weight: 500; }
+  .c-tit { margin: 1rem 0 0; font: var(--t-h5); text-wrap: balance; }
+  .c-tit a { color: var(--text); text-decoration: none; }
+  /* O link cobre todo o cartão (sem duplicar links para leitores de ecrã). */
+  .c-tit a::after { content: ''; position: absolute; inset: 0; border-radius: var(--radius); }
+  .c-tit a:focus-visible { outline: none; }
+  .c-tit a:focus-visible::after { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .c-resumo { margin: .75rem 0 1.5rem; color: var(--text-2); font: var(--t-body-2);
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .c-rodape { margin: auto 0 0; display: flex; gap: .5rem; flex-wrap: wrap; font: var(--t-body-3); color: var(--text-2); }
+</style>

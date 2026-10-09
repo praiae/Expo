@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import netlify from '@astrojs/netlify';
+import { satteri } from '@astrojs/markdown-satteri';
 
 // Domínios aceites no cabeçalho Host (verificação de origem dos formulários).
 // No Netlify, URL e DEPLOY_PRIME_URL são definidos automaticamente durante o build.
@@ -21,6 +22,12 @@ export default defineConfig({
   security: {
     checkOrigin: true,
     allowedDomains: [...dominios].map((hostname) => ({ hostname })),
+  },
+  markdown: {
+    // Notas de rodapé dos artigos usadas como lista de referências.
+    processor: satteri({
+      features: { gfm: { footnotes: { label: 'Referências', backLabel: 'Voltar à citação {reference} no texto' } } },
+    }),
   },
   vite: { ssr: { external: ['pg', '@electric-sql/pglite'] } },
 });
