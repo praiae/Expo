@@ -1,0 +1,111 @@
+---
+import App from '../../layouts/App.astro';
+import { db, hashPassword, auditar } from '../../lib/db.js';
+import { PERFIS } from '../../lib/constantes.js';
+import { randomBytes } from 'node:crypto';
+
+const user = Astro.locals.user;
+let erro = '';
+let ok = '';
+let senhaGerada = '';
+const gerar = () => randomBytes(9).toString('base64url');
+
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const accao = String(fd.get('accao'));
+  const id = Number(fd.get('id'));
+  if (accao === 'criar') {
+    const nome = String(fd.get('nome') || '').trim();
+    const email = String(fd.get('email') || '').trim();
+    const role = String(fd.get('role'));
+    const pessoaId = Number(fd.get('pessoa_id')) || null;
+    if (!nome || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !PERFIS[role]) erro = 'Preencha nome, e-mail válido e perfil.';
+    else if (db().prepare('SELECT 1 FROM utilizadores WHERE email = ?').get(email)) erro = 'Já existe um utilizador com esse e-mail.';
+    else if (role === 'externo' && (!pessoaId || !db().prepare('SELECT 1 FROM pessoas WHERE id = ?').get(pessoaId))) erro = 'Utilizadores externos têm de estar associados a um registo de beneficiário existente.';
+    else {
+      senhaGerada = gerar();
+      db().prepare('INSERT INTO utilizadores (nome, email, password_hash, role, pessoa_id) VALUES (?, ?, ?, ?, ?)')
+        .run(nome, email, hashPassword(senhaGerada), role, role === 'externo' ? pessoaId : null);
+      auditar(user, 'Criação de utilizador', `${email} (${role})`, Astro.locals.ip);
+      ok = `Utilizador ${email} criado. Palavra-passe temporária:`;
+    }
+  } else if (id && id !== user.id) {
+    if (accao === 'alternar') {
+      db().prepare('UPDATE utilizadores SET ativo = 1 - ativo WHERE id = ?').run(id);
+      db().prepare('DELETE FROM sessoes WHERE utilizador_id = ?').run(id);
+      auditar(user, 'Activação/desactivação de utilizador', `utilizador:${id}`, Astro.locals.ip);
+      ok = 'Estado do utilizador actualizado.';
+    } else if (accao === 'repor') {
+      senhaGerada = gerar();
+      db().prepare('UPDATE utilizadores SET password_hash = ? WHERE id = ?').run(hashPassword(senhaGerada), id);
+      db().prepare('DELETE FROM sessoes WHERE utilizador_id = ?').run(id);
+      auditar(user, 'Reposição de palavra-passe', `utilizador:${id}`, Astro.locals.ip);
+      ok = 'Palavra-passe reposta. Nova palavra-passe temporária:';
+    } else if (accao === 'perfil' && PERFIS[String(fd.get('role'))] && fd.get('role') !== 'externo') {
+      db().prepare('UPDATE utilizadores SET role = ? WHERE id = ? AND role != ?').run(String(fd.get('role')), id, 'externo');
+      auditar(user, 'Alteração de perfil', `utilizador:${id} → ${fd.get('role')}`, Astro.locals.ip);
+      ok = 'Perfil actualizado.';
+    }
+  } else if (id === user.id) {
+    erro = 'Não pode alterar a sua própria conta aqui. Use "Conta".';
+  }
+}
+
+const lista = db().prepare(`SELECT u.*, p.nome pessoa_nome,
+  (SELECT MAX(criado_em) FROM auditoria a WHERE a.utilizador_id = u.id AND a.acao = 'Início de sessão') ultimo
+  FROM utilizadores u LEFT JOIN pessoas p ON p.id = u.pessoa_id ORDER BY u.ativo DESC, u.role, u.nome`).all();
+const PERFIS_INTERNOS = Object.entries(PERFIS).filter(([k]) => k !== 'externo');
+---
+<App title="Utilizadores" ativo="utilizadores" subtitulo="Contas de acesso e perfis de permissão.">
+  {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
+  {ok && <div class="alerta alerta--ok" role="status">{ok} {senhaGerada && <strong class="mono">{senhaGerada}</strong>}
+    {senhaGerada && <><br /><span class="hint">Comunique-a de forma segura; não volta a ser mostrada.</span></>}</div>}
+
+  <section class="card" style="margin-bottom:1rem">
+    <h2 style="font-size:1.05rem">Novo utilizador</h2>
+    <form method="post" class="cols">
+      <input type="hidden" name="accao" value="criar" />
+      <label class="field"><span>Nome</span><input type="text" name="nome" required /></label>
+      <label class="field"><span>E-mail</span><input type="email" name="email" required /></label>
+      <label class="field"><span>Perfil</span><select name="role">{Object.entries(PERFIS).map(([k, r]) => <option value={k}>{r}</option>)}</select></label>
+      <label class="field"><span>N.º do registo (só externos)</span><input type="number" name="pessoa_id" min="1" /></label>
+      <div style="align-self:end"><button class="btn" type="submit">Criar</button></div>
+    </form>
+  </section>
+
+  <div class="tabela-wrap">
+    <table>
+      <caption class="sr-only">Utilizadores</caption>
+      <thead><tr><th>Nome</th><th>Perfil</th><th>Estado</th><th>Último acesso</th><th>Acções</th></tr></thead>
+      <tbody>
+        {lista.map((u) => (
+          <tr>
+            <td>{u.nome}<br /><span class="hint">{u.email}</span>{u.pessoa_nome && <><br /><a class="hint" href={`/app/beneficiarios/${u.pessoa_id}`}>Registo: {u.pessoa_nome}</a></>}</td>
+            <td>
+              {u.id === user.id || u.role === 'externo' ? PERFIS[u.role] : (
+                <form method="post" class="linha-accoes">
+                  <input type="hidden" name="accao" value="perfil" /><input type="hidden" name="id" value={u.id} />
+                  <label class="sr-only" for={`r${u.id}`}>Perfil de {u.nome}</label>
+                  <select id={`r${u.id}`} name="role" style="min-height:36px;width:auto">{PERFIS_INTERNOS.map(([k, r]) => <option value={k} selected={u.role === k}>{r}</option>)}</select>
+                  <button class="btn btn--ghost btn--sm" type="submit">Aplicar</button>
+                </form>
+              )}
+            </td>
+            <td><span class={`tag ${u.ativo ? 'validado' : 'incompleto'}`}>{u.ativo ? 'Activo' : 'Inactivo'}</span></td>
+            <td class="hint">{u.ultimo ?? '—'}</td>
+            <td>
+              {u.id !== user.id && (
+                <div class="linha-accoes">
+                  <form method="post"><input type="hidden" name="accao" value="alternar" /><input type="hidden" name="id" value={u.id} />
+                    <button class="btn btn--ghost btn--sm" type="submit">{u.ativo ? 'Desactivar' : 'Activar'}</button></form>
+                  <form method="post"><input type="hidden" name="accao" value="repor" /><input type="hidden" name="id" value={u.id} />
+                    <button class="btn btn--ghost btn--sm" type="submit">Repor palavra-passe</button></form>
+                </div>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</App>

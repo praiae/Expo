@@ -1,0 +1,62 @@
+---
+import App from '../../layouts/App.astro';
+import { db, parametrosPrioridade, PARAMETROS_PADRAO, auditar } from '../../lib/db.js';
+import { recalcularTodos } from '../../lib/pessoas.js';
+
+const user = Astro.locals.user;
+const ROTULOS: Record<string, string> = {
+  apoio_permanente: 'Necessita de apoio permanente', apoio_parcial: 'Necessita de apoio parcial', nao_desloca_sozinho: 'Não se desloca sozinho',
+  ajuda_sair_casa: 'Precisa de ajuda para sair de casa', apoio_transferencias: 'Precisa de apoio para transferências',
+  lim_membros_sup: 'Limitação nos membros superiores', lim_visual: 'Limitação visual', lim_comunicacao: 'Limitação na comunicação',
+  idoso: 'Idoso (60+)', precisa_produto: 'Necessita de produto de apoio', manutencao: 'Precisa de manutenção/reparação',
+  sem_rendimento: 'Sem rendimento', apoio_social: 'Precisa de apoio social para aquisição',
+};
+let ok = '';
+let erro = '';
+
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  let novo;
+  if (fd.get('accao') === 'repor') novo = PARAMETROS_PADRAO;
+  else {
+    const n = (k: string) => Math.max(0, Math.min(20, parseInt(String(fd.get(k) ?? ''), 10) || 0));
+    novo = { pesos: Object.fromEntries(Object.keys(PARAMETROS_PADRAO.pesos).map((k) => [k, n(`w_${k}`)])), limiar_p1: n('limiar_p1'), limiar_p2: n('limiar_p2') };
+  }
+  if (novo.limiar_p1 <= novo.limiar_p2) erro = 'O limiar da prioridade 1 tem de ser superior ao da prioridade 2.';
+  else {
+    db().prepare('UPDATE parametros SET valor = ? WHERE chave = ?').run(JSON.stringify(novo), 'prioridade');
+    const n = recalcularTodos();
+    auditar(user, 'Alteração de parâmetros de prioridade', JSON.stringify(novo), Astro.locals.ip);
+    ok = `Parâmetros guardados. ${n} registo(s) reclassificado(s).`;
+  }
+}
+const p = parametrosPrioridade();
+const max = Object.values(p.pesos).reduce((s, v) => s + Number(v), 0);
+---
+<App title="Parâmetros de prioridade" ativo="parametros" subtitulo="Pesos usados na classificação automática. Ao guardar, todos os registos são reclassificados.">
+  {ok && <div class="alerta alerta--ok" role="status">{ok}</div>}
+  {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
+  <form method="post" class="stack">
+    <section class="card">
+      <h2 style="font-size:1.05rem">Pesos por factor</h2>
+      <div class="cols">
+        {Object.entries(ROTULOS).map(([k, r]) => (
+          <label class="field"><span>{r}</span><input type="number" name={`w_${k}`} min="0" max="20" value={p.pesos[k]} /></label>
+        ))}
+      </div>
+      <p class="hint" style="margin-top:1rem">"Apoio parcial" só conta quando não há apoio permanente. Pontuação máxima possível: {max - p.pesos.apoio_parcial}.</p>
+    </section>
+    <section class="card">
+      <h2 style="font-size:1.05rem">Limiares</h2>
+      <div class="cols">
+        <label class="field"><span>Prioridade 1 (urgente) a partir de</span><input type="number" name="limiar_p1" min="1" max="20" value={p.limiar_p1} /></label>
+        <label class="field"><span>Prioridade 2 (moderada) a partir de</span><input type="number" name="limiar_p2" min="0" max="20" value={p.limiar_p2} /></label>
+      </div>
+      <p class="hint" style="margin-top:1rem">Abaixo do limiar da prioridade 2 o registo fica em prioridade 3 (futura ou preventiva).</p>
+    </section>
+    <div class="linha-accoes">
+      <button class="btn" type="submit">Guardar e reclassificar</button>
+      <button class="btn btn--ghost" type="submit" name="accao" value="repor" formnovalidate>Repor valores de origem</button>
+    </div>
+  </form>
+</App>

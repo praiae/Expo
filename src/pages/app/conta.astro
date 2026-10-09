@@ -1,0 +1,36 @@
+---
+import App from '../../layouts/App.astro';
+import { db, hashPassword, verificarPassword, auditar } from '../../lib/db.js';
+
+const user = Astro.locals.user;
+let erro = '';
+let ok = '';
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  const actual = String(fd.get('actual') || '');
+  const nova = String(fd.get('nova') || '');
+  const conf = String(fd.get('confirmar') || '');
+  const u = db().prepare('SELECT password_hash FROM utilizadores WHERE id = ?').get(user.id);
+  if (!verificarPassword(actual, u.password_hash)) erro = 'A palavra-passe actual está incorrecta.';
+  else if (nova.length < 10) erro = 'A nova palavra-passe deve ter pelo menos 10 caracteres.';
+  else if (nova !== conf) erro = 'A confirmação não coincide.';
+  else {
+    db().prepare('UPDATE utilizadores SET password_hash = ? WHERE id = ?').run(hashPassword(nova), user.id);
+    auditar(user, 'Alteração de palavra-passe', null, Astro.locals.ip);
+    ok = 'Palavra-passe alterada com sucesso.';
+  }
+}
+---
+<App title="A minha conta" subtitulo={user.email}>
+  <div class="card" style="max-width:520px">
+    <h2 style="font-size:1.1rem">Alterar palavra-passe</h2>
+    {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
+    {ok && <div class="alerta alerta--ok" role="status">{ok}</div>}
+    <form method="post" class="stack">
+      <label class="field"><span>Palavra-passe actual</span><input type="password" name="actual" autocomplete="current-password" required /></label>
+      <label class="field"><span>Nova palavra-passe</span><input type="password" name="nova" autocomplete="new-password" minlength="10" required /><span class="hint">Mínimo de 10 caracteres.</span></label>
+      <label class="field"><span>Confirmar nova palavra-passe</span><input type="password" name="confirmar" autocomplete="new-password" required /></label>
+      <button class="btn" type="submit">Guardar</button>
+    </form>
+  </div>
+</App>

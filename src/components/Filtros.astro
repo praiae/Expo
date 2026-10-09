@@ -1,0 +1,28 @@
+---
+// Barra de filtros partilhada (lista, prioridades, relatórios). Envia por GET.
+import { NOMES_PROVINCIAS, SEXOS, FAIXAS_ETARIAS, CATEGORIAS, CONDICOES, PRODUTOS, SITUACOES_PROFISSIONAIS } from '../lib/constantes.js';
+
+interface Props { f: Record<string, string>; campos?: string[]; acao?: string; }
+const TODOS = ['q', 'provincia', 'municipio', 'sexo', 'faixa', 'categoria', 'condicao', 'produto', 'prioridade', 'estado', 'situacao', 'completo'];
+const { f = {}, campos = TODOS, acao = Astro.url.pathname } = Astro.props;
+const tem = (c: string) => campos.includes(c);
+const sel = (k: string, v: string | number) => String(f[k] ?? '') === String(v);
+---
+<form method="get" action={acao} class="filtros card no-print" role="search" aria-label="Filtros">
+  {tem('q') && <label class="field col-2"><span>Pesquisar</span><input type="search" name="q" value={f.q ?? ''} placeholder="Nome ou n.º de BI" /></label>}
+  {tem('provincia') && <label class="field"><span>Província</span><select name="provincia"><option value="">Todas</option>{NOMES_PROVINCIAS.map((p) => <option selected={sel('provincia', p)}>{p}</option>)}</select></label>}
+  {tem('municipio') && <label class="field"><span>Município</span><input type="text" name="municipio" value={f.municipio ?? ''} /></label>}
+  {tem('sexo') && <label class="field"><span>Sexo</span><select name="sexo"><option value="">Todos</option>{SEXOS.map((s) => <option selected={sel('sexo', s)}>{s}</option>)}</select></label>}
+  {tem('faixa') && <label class="field"><span>Faixa etária</span><select name="faixa"><option value="">Todas</option>{FAIXAS_ETARIAS.map((x) => <option value={x.id} selected={sel('faixa', x.id)}>{x.nome}</option>)}</select></label>}
+  {tem('categoria') && <label class="field"><span>Categoria</span><select name="categoria"><option value="">Todas</option>{CATEGORIAS.map((c) => <option selected={sel('categoria', c)}>{c}</option>)}</select></label>}
+  {tem('condicao') && <label class="field"><span>Condição</span><select name="condicao"><option value="">Todas</option>{Object.entries(CONDICOES).map(([k, r]) => <option value={k} selected={sel('condicao', k)}>{r}</option>)}</select></label>}
+  {tem('produto') && <label class="field"><span>Produto procurado</span><select name="produto"><option value="">Todos</option>{Object.entries(PRODUTOS).map(([k, r]) => <option value={k} selected={sel('produto', k)}>{r}</option>)}</select></label>}
+  {tem('prioridade') && <label class="field"><span>Prioridade</span><select name="prioridade"><option value="">Todas</option>{[1, 2, 3].map((p) => <option value={p} selected={sel('prioridade', p)}>Prioridade {p}</option>)}</select></label>}
+  {tem('situacao') && <label class="field"><span>Situação profissional</span><select name="situacao"><option value="">Todas</option>{SITUACOES_PROFISSIONAIS.map((s) => <option selected={sel('situacao', s)}>{s}</option>)}</select></label>}
+  {tem('estado') && <label class="field"><span>Estado</span><select name="estado"><option value="">Todos</option><option value="pendente" selected={sel('estado', 'pendente')}>Pendente</option><option value="validado" selected={sel('estado', 'validado')}>Validado</option></select></label>}
+  {tem('completo') && <label class="field"><span>Preenchimento</span><select name="completo"><option value="">Todos</option><option value="1" selected={sel('completo', '1')}>Completo</option><option value="0" selected={sel('completo', '0')}>Incompleto</option></select></label>}
+  <div class="filtros-accoes">
+    <button class="btn" type="submit">Filtrar</button>
+    <a class="btn btn--ghost" href={acao}>Limpar</a>
+  </div>
+</form>

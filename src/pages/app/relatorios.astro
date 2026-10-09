@@ -1,0 +1,113 @@
+---
+import App from '../../layouts/App.astro';
+import Filtros from '../../components/Filtros.astro';
+import Barras from '../../components/Barras.astro';
+import MapaProvincias from '../../components/MapaProvincias.astro';
+import { db, auditar } from '../../lib/db.js';
+import { lerFiltros, queryString } from '../../lib/filtros.js';
+import { calcularEstatisticas, fmt, pct } from '../../lib/estatisticas.js';
+import { pode } from '../../lib/constantes.js';
+
+const user = Astro.locals.user;
+const f = lerFiltros(Astro.url);
+const CAMPOS = ['provincia', 'municipio', 'sexo', 'faixa', 'categoria', 'condicao', 'produto', 'prioridade', 'situacao'];
+let ok = '';
+
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  if (fd.get('accao') === 'guardar') {
+    const titulo = String(fd.get('titulo') || '').trim().slice(0, 120) || 'Relatório estatístico';
+    const e = calcularEstatisticas(f);
+    db().prepare('INSERT INTO relatorios (tipo, filtros, resultados, utilizador_id) VALUES (?, ?, ?, ?)')
+      .run(titulo, JSON.stringify(f), JSON.stringify(e), user.id);
+    auditar(user, 'Relatório guardado', titulo, Astro.locals.ip);
+    ok = 'Relatório guardado no histórico.';
+  } else if (fd.get('accao') === 'apagar') {
+    db().prepare('DELETE FROM relatorios WHERE id = ? AND (utilizador_id = ? OR ? = 1)')
+      .run(Number(fd.get('id')), user.id, pode(user, 'administracao') ? 1 : 0);
+  }
+}
+
+const e = calcularEstatisticas(f);
+const t = e.totais;
+const guardados = db().prepare(`SELECT r.id, r.data, r.tipo, r.filtros, json_extract(r.resultados, '$.totais.total') total, u.nome autor
+  FROM relatorios r LEFT JOIN utilizadores u ON u.id = r.utilizador_id ORDER BY r.id DESC LIMIT 20`).all();
+const filtrosActivos = Object.entries(f).filter(([k]) => CAMPOS.includes(k));
+const kz = (n: number) => `${fmt(n)} Kz`;
+---
+<App title="Relatórios estatísticos" ativo="relatorios" subtitulo="Indicadores agregados sobre registos validados. Nenhum dado pessoal é apresentado.">
+  <Fragment slot="accoes">
+    <a class="btn btn--ghost" href={`/app/exportar${queryString(f, { tipo: 'estatisticas' })}`}>Exportar Excel</a>
+    <a class="btn btn--ghost" href={`/app/exportar${queryString(f, { tipo: 'anonimo' })}`}>Microdados anonimizados</a>
+    <button class="btn btn--ghost" type="button" onclick="window.print()">Imprimir / PDF</button>
+  </Fragment>
+
+  {ok && <div class="alerta alerta--ok" role="status">{ok}</div>}
+  <Filtros f={f} campos={CAMPOS} />
+
+  <p class="hint">
+    {filtrosActivos.length ? `Filtros: ${filtrosActivos.map(([k, v]) => `${k} = ${v}`).join(' · ')}` : 'Sem filtros — universo completo.'}
+    {' '}Gerado em {new Date().toLocaleString('pt-AO')}.
+  </p>
+
+  <section class="kpis">
+    <div class="kpi"><p class="kpi-rot">Total</p><p class="kpi-valor">{fmt(t.total)}</p></div>
+    <div class="kpi"><p class="kpi-rot">Pessoas com deficiência</p><p class="kpi-valor">{fmt(t.pcd)}</p><p class="kpi-nota">{pct(t.pcd, t.total)}</p></div>
+    <div class="kpi"><p class="kpi-rot">Idosos</p><p class="kpi-valor">{fmt(t.idosos)}</p><p class="kpi-nota">{pct(t.idosos, t.total)}</p></div>
+    <div class="kpi"><p class="kpi-rot">Muletas com necessidade de apoio</p><p class="kpi-valor">{fmt(t.muletasApoio)}</p></div>
+    <div class="kpi"><p class="kpi-rot">Intenção de compra futura</p><p class="kpi-valor">{fmt(t.aquisicaoFutura)}</p><p class="kpi-nota">{fmt(t.compraImediata)} com compra imediata</p></div>
+  </section>
+
+  <div class="paineis">
+    <section class="card painel"><h2>Por província</h2><MapaProvincias dados={e.porProvincia} /></section>
+    <section class="card painel"><h2>Principais municípios</h2><Barras dados={e.porMunicipio} total={t.total} /></section>
+    <section class="card painel"><h2>Por categoria</h2><Barras dados={e.porCategoria} total={t.total} /></section>
+    <section class="card painel"><h2>Por tipo de deficiência</h2><Barras dados={e.porTipoDeficiencia} cor="var(--series-3)" total={t.total} /></section>
+    <section class="card painel"><h2>Causas</h2><Barras dados={e.porCausa} cor="var(--series-4)" total={t.total} /></section>
+    <section class="card painel"><h2>Sexo e idade</h2><Barras dados={e.porSexo} cor="var(--series-5)" total={t.total} /><div style="height:1.25rem"></div><Barras dados={e.faixas} cor="var(--series-7)" total={t.total} /></section>
+    <section class="card painel"><h2>Prioridade</h2><Barras dados={e.porPrioridade} cor="var(--p1)" total={t.total} /></section>
+    <section class="card painel"><h2>Situação profissional</h2><Barras dados={e.porSituacao} cor="var(--series-3)" total={t.total} /></section>
+    <section class="card painel"><h2>Margem salarial</h2><Barras dados={e.porMargem} cor="var(--series-1)" total={t.total} /></section>
+    <section class="card painel">
+      <h2>Rendimento médio estimado por província</h2>
+      <Barras dados={e.salarioPorProvincia.map((r) => ({ nome: r.nome ?? '—', valor: r.media }))} cor="var(--series-6)" formato={kz} />
+      <p class="nota">Estimativa a partir do ponto médio de cada margem salarial declarada.</p>
+    </section>
+    <section class="card painel">
+      <h2>Procura por produto</h2>
+      <div class="tabela-wrap">
+        <table>
+          <thead><tr><th>Produto</th><th class="num">Procura</th><th class="num">Compra imediata</th></tr></thead>
+          <tbody>{e.procura.map((r) => <tr><td>{r.nome}</td><td class="num">{fmt(r.valor)}</td><td class="num">{fmt(r.imediata)}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <section class="card no-print" style="margin-top:1rem">
+    <h2 style="font-size:1.05rem">Guardar este relatório</h2>
+    <form method="post" class="linha-accoes">
+      <input type="hidden" name="accao" value="guardar" />
+      <label class="field" style="flex:1;min-width:220px"><span class="sr-only">Título</span><input type="text" name="titulo" placeholder="Título do relatório" maxlength="120" /></label>
+      <button class="btn" type="submit">Guardar</button>
+    </form>
+    {guardados.length > 0 && (
+      <div class="tabela-wrap" style="margin-top:1rem">
+        <table>
+          <thead><tr><th>Data</th><th>Título</th><th>Autor</th><th class="num">Total</th><th></th></tr></thead>
+          <tbody>
+            {guardados.map((r) => (
+              <tr>
+                <td>{r.data}</td>
+                <td><a href={`/app/relatorios${queryString(JSON.parse(r.filtros || '{}'))}`}>{r.tipo}</a></td>
+                <td>{r.autor ?? '—'}</td>
+                <td class="num">{fmt(r.total)}</td>
+                <td><form method="post"><input type="hidden" name="accao" value="apagar" /><input type="hidden" name="id" value={r.id} /><button class="btn btn--ghost btn--sm" type="submit">Apagar</button></form></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+</App>

@@ -1,0 +1,95 @@
+---
+import Base from './Base.astro';
+import A11y from '../components/A11y.astro';
+import { pode, PERFIS } from '../lib/constantes.js';
+import '../styles/app.css';
+
+interface Props { title: string; ativo?: string; subtitulo?: string; }
+const { title, ativo = '', subtitulo } = Astro.props;
+const user = Astro.locals.user;
+
+const NAV = [
+  { grupo: 'Geral', itens: [
+    { id: 'painel', href: '/app', rot: 'Painel', perm: 'dashboard' },
+    { id: 'meus-dados', href: '/app/meus-dados', rot: 'Os meus dados', perm: 'meus-dados' },
+  ] },
+  { grupo: 'Beneficiários', itens: [
+    { id: 'beneficiarios', href: '/app/beneficiarios', rot: 'Registos', perm: 'beneficiarios.ver' },
+    { id: 'novo', href: '/app/beneficiarios/novo', rot: 'Novo registo', perm: 'beneficiarios.editar' },
+    { id: 'prioridades', href: '/app/prioridades', rot: 'Prioridades', perm: 'beneficiarios.ver' },
+    { id: 'clientes', href: '/app/clientes', rot: 'Procura de produtos', perm: 'beneficiarios.ver' },
+  ] },
+  { grupo: 'Análise', itens: [
+    { id: 'relatorios', href: '/app/relatorios', rot: 'Relatórios', perm: 'relatorios' },
+  ] },
+  { grupo: 'Administração', itens: [
+    { id: 'utilizadores', href: '/app/utilizadores', rot: 'Utilizadores', perm: 'administracao' },
+    { id: 'parametros', href: '/app/parametros', rot: 'Parâmetros', perm: 'administracao' },
+    { id: 'auditoria', href: '/app/auditoria', rot: 'Auditoria', perm: 'administracao' },
+    { id: 'contactos', href: '/app/contactos', rot: 'Contactos recebidos', perm: 'administracao' },
+    { id: 'backup', href: '/app/backup', rot: 'Cópia de segurança', perm: 'administracao' },
+  ] },
+].map((g) => ({ ...g, itens: g.itens.filter((i) => pode(user, i.perm)) })).filter((g) => g.itens.length);
+---
+<Base title={`${title} · Expo Connect Angola`} transicoes>
+  <div class="app">
+    <aside class="sidebar" id="menu-lateral" data-aberto="false">
+      <a class="marca" href="/app">
+        <img src="/logo.png" alt="" width="36" height="36" />
+        <span>Expo Connect<small>Angola</small></span>
+      </a>
+      <nav aria-label="Menu principal">
+        {NAV.map((g) => (
+          <div class="nav-grupo">
+            <p class="nav-titulo">{g.grupo}</p>
+            <ul>
+              {g.itens.map((i) => (
+                <li><a href={i.href} aria-current={ativo === i.id ? 'page' : undefined}>{i.rot}</a></li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+      <a class="nav-site" href="/">← Site público</a>
+    </aside>
+
+    <div class="app-corpo">
+      <header class="app-top">
+        <button type="button" class="btn btn--ghost btn--sm menu-btn" aria-controls="menu-lateral" aria-expanded="false">Menu</button>
+        <A11y />
+        <div class="utilizador">
+          <span class="u-nome">{user?.nome}<small>{PERFIS[user?.role] ?? ''}</small></span>
+          <a class="btn btn--ghost btn--sm" href="/app/conta">Conta</a>
+          <form method="post" action="/app/sair"><button class="btn btn--soft btn--sm" type="submit">Sair</button></form>
+        </div>
+      </header>
+
+      <main id="conteudo" class="app-main" tabindex="-1">
+        <div class="cabecalho">
+          <div>
+            <h1>{title}</h1>
+            {subtitulo && <p class="subtitulo">{subtitulo}</p>}
+          </div>
+          <div class="cabecalho-accoes no-print"><slot name="accoes" /></div>
+        </div>
+        <slot />
+      </main>
+    </div>
+  </div>
+</Base>
+
+<script>
+  function menu() {
+    const btn = document.querySelector<HTMLButtonElement>('.menu-btn');
+    const lado = document.getElementById('menu-lateral');
+    if (!btn || !lado || btn.dataset.ligado) return;
+    btn.dataset.ligado = '1';
+    btn.addEventListener('click', () => {
+      const aberto = lado.dataset.aberto !== 'true';
+      lado.dataset.aberto = String(aberto);
+      btn.setAttribute('aria-expanded', String(aberto));
+    });
+  }
+  menu();
+  document.addEventListener('astro:page-load', menu);
+</script>

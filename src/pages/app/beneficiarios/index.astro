@@ -1,0 +1,62 @@
+---
+import App from '../../../layouts/App.astro';
+import Filtros from '../../../components/Filtros.astro';
+import { db } from '../../../lib/db.js';
+import { lerFiltros, construirWhere, queryString } from '../../../lib/filtros.js';
+import { fmt } from '../../../lib/estatisticas.js';
+import { pode, PRIORIDADES } from '../../../lib/constantes.js';
+
+const user = Astro.locals.user;
+const POR_PAGINA = 25;
+const f = lerFiltros(Astro.url);
+const pagina = Math.max(1, parseInt(Astro.url.searchParams.get('p') || '1', 10) || 1);
+const { sql, args } = construirWhere(f);
+const total = db().prepare(`SELECT COUNT(*) n FROM v_pessoas ${sql}`).get(...args).n;
+const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+const linhas = db().prepare(`SELECT id, nome, sexo, idade, provincia, municipio, categoria, prioridade, estado, completo, campos_em_falta, atualizado_em
+  FROM v_pessoas ${sql} ORDER BY atualizado_em DESC, id DESC LIMIT ? OFFSET ?`).all(...args, POR_PAGINA, (pagina - 1) * POR_PAGINA);
+const msg = Astro.url.searchParams.get('ok');
+---
+<App title="Beneficiários" ativo="beneficiarios" subtitulo={`${fmt(total)} registo(s) encontrados`}>
+  <Fragment slot="accoes">
+    {pode(user, 'beneficiarios.editar') && <a class="btn" href="/app/beneficiarios/novo">+ Novo registo</a>}
+    {pode(user, 'exportar.identificado') && <a class="btn btn--ghost" href={`/app/exportar${queryString(f, { tipo: 'lista' })}`}>Exportar Excel</a>}
+  </Fragment>
+
+  {msg === 'eliminado' && <div class="alerta alerta--ok" role="status">Registo eliminado.</div>}
+  <Filtros f={f} />
+
+  {linhas.length === 0 ? <p class="vazio">Nenhum registo corresponde aos filtros.</p> : (
+    <div class="tabela-wrap">
+      <table>
+        <caption class="sr-only">Lista de beneficiários</caption>
+        <thead><tr><th>Nome</th><th>Idade</th><th>Localização</th><th>Categoria</th><th>Prioridade</th><th>Estado</th></tr></thead>
+        <tbody>
+          {linhas.map((r) => (
+            <tr>
+              <td><a href={`/app/beneficiarios/${r.id}`}>{r.nome}</a><br /><span class="hint">{r.sexo ?? ''}</span></td>
+              <td class="num">{r.idade ?? '—'}</td>
+              <td>{r.provincia ?? '—'}<br /><span class="hint">{r.municipio ?? ''}</span></td>
+              <td>{r.categoria}</td>
+              <td>{r.prioridade && <span class={`tag ${PRIORIDADES[r.prioridade].classe}`}>P{r.prioridade} · {PRIORIDADES[r.prioridade].desc}</span>}</td>
+              <td>
+                <span class={`tag ${r.estado}`}>{r.estado === 'validado' ? 'Validado' : 'Pendente'}</span>
+                {!r.completo && <><br /><span class="tag incompleto" title={`Em falta: ${r.campos_em_falta}`}>Incompleto</span></>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+
+  {paginas > 1 && (
+    <nav class="paginacao" aria-label="Paginação">
+      <span class="hint">Página {pagina} de {paginas}</span>
+      <span class="linha-accoes">
+        {pagina > 1 && <a class="btn btn--ghost btn--sm" href={queryString(f, { p: pagina - 1 }) || '?'}>← Anterior</a>}
+        {pagina < paginas && <a class="btn btn--ghost btn--sm" href={queryString(f, { p: pagina + 1 })}>Seguinte →</a>}
+      </span>
+    </nav>
+  )}
+</App>

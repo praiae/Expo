@@ -1,0 +1,153 @@
+---
+import App from '../../../../layouts/App.astro';
+import { db, auditar } from '../../../../lib/db.js';
+import { obterPessoa, validarRegisto, calcularPrioridade } from '../../../../lib/pessoas.js';
+import { pode, PRIORIDADES, CONDICOES, FUNCIONALIDADE, PRODUTOS, INTENCAO, MARGENS_SALARIAIS } from '../../../../lib/constantes.js';
+
+const user = Astro.locals.user;
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || !db().prepare('SELECT 1 FROM pessoas WHERE id = ?').get(id)) {
+  return new Response('Registo não encontrado.', { status: 404 });
+}
+
+let erro = '';
+if (Astro.request.method === 'POST') {
+  const accao = String((await Astro.request.formData()).get('accao') || '');
+  if (accao === 'validar' && pode(user, 'beneficiarios.validar')) {
+    erro = validarRegisto(id, user) || '';
+    if (!erro) return Astro.redirect(`/app/beneficiarios/${id}?ok=validado`);
+  } else if (accao === 'eliminar' && pode(user, 'administracao')) {
+    db().prepare('DELETE FROM pessoas WHERE id = ?').run(id);
+    db().prepare('UPDATE utilizadores SET pessoa_id = NULL WHERE pessoa_id = ?').run(id);
+    auditar(user, 'Eliminação de registo', `pessoa:${id}`, Astro.locals.ip);
+    return Astro.redirect('/app/beneficiarios?ok=eliminado');
+  } else {
+    return new Response('Acção não autorizada.', { status: 403 });
+  }
+}
+
+const p = obterPessoa(id);
+const sensivel = pode(user, 'dados.sensiveis');
+if (sensivel) auditar(user, 'Consulta de dados sensíveis', `pessoa:${id}`, Astro.locals.ip);
+const prio = calcularPrioridade(p);
+const historico = db().prepare(`SELECT h.*, u.nome autor FROM historico h LEFT JOIN utilizadores u ON u.id = h.utilizador_id
+  WHERE h.pessoa_id = ? ORDER BY h.id DESC LIMIT 50`).all(id);
+const autores = db().prepare(`SELECT (SELECT nome FROM utilizadores WHERE id = ?) criador, (SELECT nome FROM utilizadores WHERE id = ?) validador`)
+  .get(p.criado_por, p.validado_por);
+
+const sim = (mapa: Record<string, string>) => Object.entries(mapa).filter(([k]) => p[k]).map(([, r]) => r);
+const margem = MARGENS_SALARIAIS.find((m) => m.id === p.margem_salarial)?.nome;
+const d = (s?: string) => (s ? new Date(s.replace(' ', 'T') + (s.includes('Z') ? '' : 'Z')).toLocaleString('pt-AO', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+const MSG: Record<string, string> = { criado: 'Registo criado.', actualizado: 'Alterações guardadas.', validado: 'Registo validado.' };
+const ok = MSG[Astro.url.searchParams.get('ok') || ''];
+const v = (x: any) => (x === null || x === undefined || x === '' ? '—' : x);
+---
+<App title={p.nome} ativo="beneficiarios" subtitulo={`Registo n.º ${p.id} · ${p.categoria}`}>
+  <Fragment slot="accoes">
+    {pode(user, 'beneficiarios.editar') && <a class="btn" href={`/app/beneficiarios/${id}/editar`}>Editar</a>}
+    {pode(user, 'beneficiarios.validar') && p.estado === 'pendente' && (
+      <form method="post"><input type="hidden" name="accao" value="validar" />
+        <button class="btn btn--soft" type="submit" disabled={!p.completo} title={p.completo ? undefined : 'Complete o registo antes de validar'}>Validar registo</button>
+      </form>
+    )}
+    <button class="btn btn--ghost" type="button" onclick="window.print()">Imprimir ficha</button>
+  </Fragment>
+
+  {ok && <div class="alerta alerta--ok" role="status">{ok}</div>}
+  {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
+  {!p.completo && <div class="alerta alerta--aviso"><strong>Registo incompleto.</strong> Em falta: {p.campos_em_falta}.</div>}
+
+  <div class="paineis">
+    <section class="card">
+      <h2 style="font-size:1.05rem">Estado e prioridade</h2>
+      <p class="linha-accoes">
+        <span class={`tag ${p.estado}`}>{p.estado === 'validado' ? 'Validado' : 'Pendente de validação'}</span>
+        <span class={`tag ${PRIORIDADES[p.prioridade].classe}`}>{PRIORIDADES[p.prioridade].nome} · {PRIORIDADES[p.prioridade].desc}</span>
+        <span class="hint">{prio.pontos} pontos</span>
+      </p>
+      {prio.motivos.length > 0 ? <ul>{prio.motivos.map((m) => <li>{m}</li>)}</ul> : <p class="hint">Sem factores de prioridade assinalados.</p>}
+      <dl class="ficha">
+        <div><dt>Registado</dt><dd>{d(p.criado_em)} {autores.criador && `por ${autores.criador}`}</dd></div>
+        <div><dt>Validado</dt><dd>{p.validado_em ? `${d(p.validado_em)} por ${autores.validador ?? '—'}` : '—'}</dd></div>
+        <div><dt>Consentimento</dt><dd>{p.consentimento ? `Sim (${d(p.consentimento_em)})` : 'Não'}</dd></div>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2 style="font-size:1.05rem">Identificação</h2>
+      <dl class="ficha">
+        <div><dt>Sexo</dt><dd>{v(p.sexo)}</dd></div>
+        <div><dt>Data de nascimento</dt><dd>{p.data_nascimento ? `${p.data_nascimento} (${p.idade} anos)` : '—'}</dd></div>
+        <div><dt>Província</dt><dd>{v(p.provincia)}</dd></div>
+        <div><dt>Município / bairro</dt><dd>{v([p.municipio, p.bairro].filter(Boolean).join(' / '))}</dd></div>
+        {sensivel ? (
+          <>
+            <div><dt>BI</dt><dd class="mono">{v(p.bi)}</dd></div>
+            <div><dt>Telefone</dt><dd>{p.telefone ? <a href={`tel:${p.telefone.replace(/\s/g, '')}`}>{p.telefone}</a> : '—'}</dd></div>
+            <div><dt>E-mail</dt><dd>{p.email ? <a href={`mailto:${p.email}`}>{p.email}</a> : '—'}</dd></div>
+            <div><dt>Morada</dt><dd>{v(p.morada)}</dd></div>
+          </>
+        ) : <div><dt>Contactos</dt><dd class="hint">Reservado ao seu perfil.</dd></div>}
+      </dl>
+    </section>
+  </div>
+
+  <div class="paineis">
+    <section class="card">
+      <h2 style="font-size:1.05rem">Condição e funcionalidade</h2>
+      <p class="sub">Condição pessoal</p>
+      {sim(CONDICOES).length ? <ul class="lista-sim">{sim(CONDICOES).map((r) => <li>{r}</li>)}</ul> : <p class="hint">—</p>}
+      <dl class="ficha" style="margin-top:1rem">
+        <div><dt>Tipo de deficiência</dt><dd>{v(p.tipo_deficiencia)}</dd></div>
+        <div><dt>Origem</dt><dd>{v(p.origem)}</dd></div>
+        <div><dt>Causa</dt><dd>{p.causa === 'Outra' ? `Outra: ${p.causa_outra}` : v(p.causa)}</dd></div>
+        <div><dt>Grau</dt><dd>{v(p.grau)}</dd></div>
+      </dl>
+      <p class="sub">Funcionalidade</p>
+      {sim(FUNCIONALIDADE).length ? <ul class="lista-sim">{sim(FUNCIONALIDADE).map((r) => <li>{r}</li>)}</ul> : <p class="hint">—</p>}
+    </section>
+
+    <section class="card">
+      <h2 style="font-size:1.05rem">Socioeconómico e procura</h2>
+      <dl class="ficha">
+        <div><dt>Nível académico</dt><dd>{v(p.nivel_academico)}</dd></div>
+        <div><dt>Sabe ler</dt><dd>{p.sabe_ler == null ? '—' : p.sabe_ler ? 'Sim' : 'Não'}</dd></div>
+        <div><dt>Situação profissional</dt><dd>{v(p.situacao_profissional)}</dd></div>
+        <div><dt>Margem salarial</dt><dd>{v(margem)}</dd></div>
+        <div><dt>Fonte de rendimento</dt><dd>{v(p.fonte_rendimento)}</dd></div>
+        <div><dt>Dependentes</dt><dd>{v(p.dependentes)}</dd></div>
+      </dl>
+      <p class="sub">Produtos necessários</p>
+      {sim(PRODUTOS).length ? <ul class="lista-sim">{sim(PRODUTOS).map((r) => <li>{r}</li>)}</ul> : <p class="hint">—</p>}
+      <p class="sub">Intenção de aquisição</p>
+      {sim(INTENCAO).length ? <ul class="lista-sim">{sim(INTENCAO).map((r) => <li>{r}</li>)}</ul> : <p class="hint">—</p>}
+      {p.servico_pretendido && <><p class="sub">Observações</p><p>{p.servico_pretendido}</p></>}
+    </section>
+  </div>
+
+  <section class="card no-print" style="margin-top:1rem">
+    <h2 style="font-size:1.05rem">Histórico de alterações</h2>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Data</th><th>Utilizador</th><th>Acção</th><th>Campos alterados</th></tr></thead>
+        <tbody>
+          {historico.map((h) => {
+            const alt = h.alteracoes ? Object.keys(JSON.parse(h.alteracoes)) : [];
+            return <tr><td>{d(h.criado_em)}</td><td>{h.autor ?? '—'}</td><td>{h.acao}</td><td class="hint">{alt.length ? alt.join(', ') : '—'}</td></tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {pode(user, 'administracao') && (
+    <section class="card no-print" style="margin-top:1rem;border-color:var(--crit)">
+      <h2 style="font-size:1.05rem">Eliminar registo</h2>
+      <p class="hint">Remove definitivamente o registo e o seu histórico (direito ao apagamento). Esta acção não pode ser anulada.</p>
+      <form method="post" onsubmit="return confirm('Eliminar definitivamente este registo?')">
+        <input type="hidden" name="accao" value="eliminar" />
+        <button class="btn btn--danger" type="submit">Eliminar definitivamente</button>
+      </form>
+    </section>
+  )}
+</App>

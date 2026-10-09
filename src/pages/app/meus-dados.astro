@@ -1,0 +1,44 @@
+---
+import App from '../../layouts/App.astro';
+import { obterPessoa } from '../../lib/pessoas.js';
+import { auditar } from '../../lib/db.js';
+import { CONDICOES, PRODUTOS, PRIORIDADES } from '../../lib/constantes.js';
+
+// Portal do utilizador externo: consulta apenas o próprio registo.
+const user = Astro.locals.user;
+const p = user.pessoa_id ? obterPessoa(user.pessoa_id) : null;
+if (p) auditar(user, 'Consulta dos próprios dados', `pessoa:${p.id}`, Astro.locals.ip);
+const sim = (m: Record<string, string>) => Object.entries(m).filter(([k]) => p?.[k]).map(([, r]) => r);
+---
+<App title="Os meus dados" ativo="meus-dados" subtitulo="Informação que a Expo Connect Angola guarda sobre si.">
+  {!p ? <p class="vazio">A sua conta ainda não está associada a um registo. Contacte a equipa técnica.</p> : (
+    <div class="stack">
+      <section class="card">
+        <p class="linha-accoes">
+          <span class={`tag ${p.estado}`}>{p.estado === 'validado' ? 'Registo validado' : 'Registo em análise'}</span>
+          <span class={`tag ${PRIORIDADES[p.prioridade].classe}`}>{PRIORIDADES[p.prioridade].nome}</span>
+        </p>
+        <dl class="ficha">
+          <div><dt>Nome</dt><dd>{p.nome}</dd></div>
+          <div><dt>Data de nascimento</dt><dd>{p.data_nascimento || '—'}</dd></div>
+          <div><dt>BI</dt><dd class="mono">{p.bi || '—'}</dd></div>
+          <div><dt>Telefone</dt><dd>{p.telefone || '—'}</dd></div>
+          <div><dt>E-mail</dt><dd>{p.email || '—'}</dd></div>
+          <div><dt>Localização</dt><dd>{[p.provincia, p.municipio, p.bairro].filter(Boolean).join(', ') || '—'}</dd></div>
+          <div><dt>Consentimento</dt><dd>{p.consentimento ? 'Concedido' : 'Não concedido'}</dd></div>
+        </dl>
+      </section>
+      <section class="card">
+        <h2 style="font-size:1.05rem">Condição e necessidades</h2>
+        {sim(CONDICOES).length ? <ul class="lista-sim">{sim(CONDICOES).map((r) => <li>{r}</li>)}</ul> : <p class="hint">—</p>}
+        <p class="sub">Produtos de apoio pedidos</p>
+        {sim(PRODUTOS).length ? <ul class="lista-sim">{sim(PRODUTOS).map((r) => <li>{r}</li>)}</ul> : <p class="hint">Nenhum.</p>}
+      </section>
+      <section class="card">
+        <h2 style="font-size:1.05rem">Os seus direitos</h2>
+        <p>Pode pedir a correcção dos seus dados, retirar o consentimento ou pedir o apagamento do registo a qualquer momento.
+          Fale com o técnico que o registou ou use o <a href="/#contacto">formulário de contacto</a>.</p>
+      </section>
+    </div>
+  )}
+</App>

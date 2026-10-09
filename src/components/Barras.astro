@@ -1,0 +1,33 @@
+---
+// Gráfico de barras horizontais em HTML/CSS (legível por leitores de ecrã como lista).
+interface Item { nome: string; valor: number; }
+interface Props { dados: Item[]; cor?: string; formato?: (n: number) => string; total?: number; rotulo?: string; }
+const { dados = [], cor = 'var(--series-1)', formato = (n: number) => new Intl.NumberFormat('pt-AO').format(n), total, rotulo } = Astro.props;
+const max = Math.max(1, ...dados.map((d) => d.valor));
+const soma = dados.reduce((s, d) => s + d.valor, 0);
+const pct = (v: number) => (total ? ` (${((v / total) * 100).toFixed(1).replace('.', ',')}%)` : '');
+---
+{soma === 0 ? (
+  <p class="vazio">Sem dados para os critérios seleccionados.</p>
+) : (
+  <ul class="barras" aria-label={rotulo}>
+    {dados.map((d) => (
+      <li>
+        <span class="b-nome">{d.nome}</span>
+        <span class="b-trilho" aria-hidden="true"><span class="b-barra" style={`width:${Math.max(d.valor ? 1.5 : 0, (d.valor / max) * 100).toFixed(1)}%;background:${cor}`}></span></span>
+        <span class="b-valor">{formato(d.valor)}<span class="b-pct">{pct(d.valor)}</span></span>
+      </li>
+    ))}
+  </ul>
+)}
+
+<style>
+  .barras { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+  li { display: grid; grid-template-columns: minmax(110px, 38%) 1fr auto; align-items: center; gap: .75rem; font-size: .88rem; }
+  .b-nome { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-trilho { height: 14px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+  .b-barra { display: block; height: 100%; border-radius: 4px; }
+  .b-valor { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; min-width: 3ch; }
+  .b-pct { font-weight: 500; color: var(--muted); font-size: .8rem; margin-left: .25rem; }
+  @media (max-width: 520px) { li { grid-template-columns: 1fr auto; } .b-trilho { grid-column: 1 / -1; grid-row: 2; } }
+</style>

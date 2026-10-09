@@ -1,0 +1,48 @@
+---
+import App from '../../layouts/App.astro';
+import Filtros from '../../components/Filtros.astro';
+import { db, parametrosPrioridade } from '../../lib/db.js';
+import { lerFiltros, construirWhere } from '../../lib/filtros.js';
+import { calcularPrioridade } from '../../lib/pessoas.js';
+import { fmt } from '../../lib/estatisticas.js';
+import { PRIORIDADES } from '../../lib/constantes.js';
+
+// Fila de atendimento: registos validados, ordenados por pontuação.
+const f = lerFiltros(Astro.url);
+const { sql, args } = construirWhere(f, { apenasValidados: true });
+const params = parametrosPrioridade();
+const linhas = db().prepare(`SELECT * FROM v_pessoas ${sql} ORDER BY prioridade ASC, prioridade_pontos DESC, criado_em ASC LIMIT 200`).all(...args);
+const contagem = db().prepare(`SELECT prioridade, COUNT(*) n FROM v_pessoas ${sql} GROUP BY prioridade`).all(...args);
+const n = (p: number) => contagem.find((c) => c.prioridade === p)?.n || 0;
+---
+<App title="Prioridades de atendimento" ativo="prioridades"
+  subtitulo={`Classificação automática: P1 a partir de ${params.limiar_p1} pontos, P2 a partir de ${params.limiar_p2}. Apenas registos validados.`}>
+  <section class="kpis">
+    {[1, 2, 3].map((p) => (
+      <div class={`kpi kpi--p${p}`}><p class="kpi-rot">{PRIORIDADES[p].nome} · {PRIORIDADES[p].desc}</p><p class="kpi-valor">{fmt(n(p))}</p></div>
+    ))}
+  </section>
+
+  <Filtros f={f} campos={['provincia', 'municipio', 'categoria', 'produto', 'prioridade']} />
+
+  {linhas.length === 0 ? <p class="vazio">Sem registos validados para estes critérios.</p> : (
+    <div class="tabela-wrap">
+      <table>
+        <caption class="sr-only">Fila de prioridade</caption>
+        <thead><tr><th>Prioridade</th><th class="num">Pontos</th><th>Nome</th><th>Localização</th><th>Factores</th></tr></thead>
+        <tbody>
+          {linhas.map((r) => (
+            <tr>
+              <td><span class={`tag ${PRIORIDADES[r.prioridade].classe}`}>P{r.prioridade}</span></td>
+              <td class="num">{r.prioridade_pontos}</td>
+              <td><a href={`/app/beneficiarios/${r.id}`}>{r.nome}</a><br /><span class="hint">{r.categoria}</span></td>
+              <td>{r.provincia ?? '—'}<br /><span class="hint">{r.municipio ?? ''}</span></td>
+              <td class="hint">{calcularPrioridade(r, params).motivos.map((m) => m.replace(/ \(\+\d+\)$/, '')).join(' · ')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+  {linhas.length === 200 && <p class="hint" style="margin-top:.75rem">A mostrar os primeiros 200. Use os filtros para refinar.</p>}
+</App>

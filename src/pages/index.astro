@@ -1,0 +1,135 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { db } from '../lib/db.js';
+import { fmt } from '../lib/estatisticas.js';
+
+// Formulário de contacto (com campo "armadilha" contra robôs e limite de tamanho).
+let enviado = false;
+let erro = '';
+const v = { nome: '', email: '', organizacao: '', mensagem: '' };
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  for (const k of Object.keys(v) as (keyof typeof v)[]) v[k] = String(fd.get(k) || '').trim().slice(0, k === 'mensagem' ? 4000 : 200);
+  if (fd.get('website')) enviado = true; // robô: finge sucesso
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) erro = 'Indique um e-mail válido.';
+  else if (v.mensagem.length < 10) erro = 'Escreva uma mensagem um pouco mais longa.';
+  else {
+    const recentes = db().prepare("SELECT COUNT(*) n FROM contactos WHERE criado_em > datetime('now', '-1 hour')").get().n;
+    if (recentes > 50) erro = 'Recebemos demasiadas mensagens. Tente mais tarde.';
+    else {
+      db().prepare('INSERT INTO contactos (nome, email, organizacao, mensagem) VALUES (?, ?, ?, ?)').run(v.nome, v.email, v.organizacao, v.mensagem);
+      enviado = true;
+    }
+  }
+}
+
+// Números públicos: apenas agregados de registos validados.
+const n = db().prepare(`SELECT COUNT(*) total, COUNT(DISTINCT provincia) provincias,
+  SUM(cadeira_manual + cadeira_eletrica + oculos_inteligentes + adaptacao_automovel + manutencao > 0) procura
+  FROM v_pessoas WHERE estado = 'validado'`).get();
+---
+<Base title="Expo Connect Angola — Acessibilidade e inclusão com dados">
+  <SiteHeader />
+  <main id="conteudo">
+    <section class="heroi">
+      <div class="container heroi-grelha">
+        <div>
+          <span class="eyebrow">Plataforma nacional de acessibilidade</span>
+          <h1>Conhecer quem precisa, para chegar primeiro a quem mais precisa.</h1>
+          <p class="lead">A Expo Connect Angola regista e analisa as necessidades de pessoas com deficiência, idosos e pessoas com mobilidade
+            reduzida em todas as províncias — para orientar apoio, produção de produtos de apoio e políticas públicas.</p>
+          <div class="linha">
+            <a class="btn" href="#contacto">Fale connosco</a>
+            <a class="btn btn--ghost" href="#como">Como funciona</a>
+          </div>
+        </div>
+        <img class="heroi-logo" src="/logo.png" alt="Logótipo da Expo Connect Angola" width="360" height="360" />
+      </div>
+    </section>
+
+    <section class="container numeros" aria-label="Números da plataforma">
+      <div><strong>{fmt(n.total)}</strong><span>pessoas registadas e validadas</span></div>
+      <div><strong>{fmt(n.provincias)}</strong><span>províncias com registos</span></div>
+      <div><strong>{fmt(n.procura)}</strong><span>pedidos de produtos de apoio</span></div>
+    </section>
+
+    <section id="missao" class="container bloco">
+      <span class="eyebrow">Missão</span>
+      <h2>Dados fiáveis ao serviço da inclusão</h2>
+      <div class="cartoes">
+        <article class="card"><h3>Estatística</h3><p>Quantas pessoas cegas, cadeirantes, idosas ou com mobilidade reduzida existem em cada província e município, e de que precisam.</p></article>
+        <article class="card"><h3>Prioridade</h3><p>Uma classificação transparente identifica os casos urgentes — quem não sai de casa sem ajuda, quem precisa de apoio permanente.</p></article>
+        <article class="card"><h3>Procura</h3><p>Cadeiras de rodas, óculos inteligentes, adaptações automóveis e manutenção: a procura real orienta a produção e a distribuição.</p></article>
+      </div>
+    </section>
+
+    <section id="como" class="container bloco">
+      <span class="eyebrow">Como funciona</span>
+      <h2>Do registo à resposta</h2>
+      <ol class="passos">
+        <li><strong>Registo no terreno.</strong> Técnicos credenciados recolhem os dados com consentimento informado.</li>
+        <li><strong>Validação.</strong> Cada registo é revisto antes de entrar nas estatísticas.</li>
+        <li><strong>Classificação.</strong> O sistema atribui automaticamente a prioridade de atendimento.</li>
+        <li><strong>Análise e acção.</strong> Gestores e parceiros recebem relatórios agregados para planear o apoio.</li>
+      </ol>
+    </section>
+
+    <section id="contacto" class="container bloco">
+      <div class="contacto card">
+        <div>
+          <span class="eyebrow">Contacto</span>
+          <h2>Quer registar-se, ser parceiro ou pedir informação?</h2>
+          <p>Escreva-nos. Respondemos a beneficiários, famílias, associações, instituições públicas e empresas.</p>
+          <p class="hint">Não envie dados de saúde por este formulário. Ver a <a href="/privacidade">política de privacidade</a>.</p>
+        </div>
+        {enviado ? (
+          <div class="alerta alerta--ok" role="status">Obrigado! A sua mensagem foi recebida.</div>
+        ) : (
+          <form method="post" action="/#contacto" class="stack">
+            {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
+            <label class="field"><span>Nome</span><input type="text" name="nome" value={v.nome} autocomplete="name" /></label>
+            <label class="field"><span>E-mail *</span><input type="email" name="email" value={v.email} autocomplete="email" required /></label>
+            <label class="field"><span>Organização</span><input type="text" name="organizacao" value={v.organizacao} autocomplete="organization" /></label>
+            <label class="field"><span>Mensagem *</span><textarea name="mensagem" rows="4" required minlength="10">{v.mensagem}</textarea></label>
+            <label class="armadilha" aria-hidden="true">Website<input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+            <button class="btn" type="submit">Enviar mensagem</button>
+          </form>
+        )}
+      </div>
+    </section>
+  </main>
+  <SiteFooter />
+</Base>
+
+<style>
+  .heroi { background: linear-gradient(180deg, var(--brand-soft), var(--bg)); padding: 4rem 0 3rem; }
+  .heroi-grelha { display: grid; grid-template-columns: 1.3fr 1fr; gap: 2rem; align-items: center; }
+  .heroi h1 { font-size: clamp(2rem, 4.5vw, 3.25rem); font-weight: 800; letter-spacing: -.025em; }
+  .lead { font-size: 1.15rem; color: var(--text-2); max-width: 60ch; }
+  .linha { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.5rem; }
+  .heroi-logo { justify-self: center; border-radius: 32px; box-shadow: var(--shadow); width: min(360px, 100%); height: auto; }
+  .numeros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: -1.5rem; }
+  .numeros div { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; box-shadow: var(--shadow); }
+  .numeros strong { display: block; font-size: 2.2rem; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+  .numeros span { color: var(--muted); font-weight: 600; }
+  .bloco { padding-top: 4rem; }
+  .bloco h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); margin-bottom: 1.25rem; }
+  .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+  .cartoes h3 { font-size: 1.15rem; }
+  .cartoes p { color: var(--text-2); margin: 0; }
+  .passos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; padding: 0; list-style: none; counter-reset: p; }
+  .passos li { counter-increment: p; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; }
+  .passos li::before { content: counter(p); display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+    background: var(--brand); color: var(--brand-ink); font-weight: 800; margin-bottom: .75rem; }
+  .contacto { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 2rem; }
+  .armadilha { position: absolute; left: -9999px; }
+  @media (max-width: 760px) {
+    .heroi { padding-top: 2.5rem; }
+    .heroi-grelha, .contacto { grid-template-columns: 1fr; }
+    .heroi-logo { width: 200px; grid-row: 1; }
+    .numeros { grid-template-columns: 1fr; margin-top: 1rem; }
+    .contacto { padding: 1.25rem; }
+  }
+</style>

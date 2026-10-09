@@ -1,0 +1,50 @@
+---
+import Base from '../../layouts/Base.astro';
+import A11y from '../../components/A11y.astro';
+import { iniciarSessao, COOKIE_SESSAO, opcoesCookie } from '../../lib/auth.js';
+
+// Só aceita redireccionamentos internos para evitar "open redirect".
+const destino = (r: string | null) => (r && r.startsWith('/app') && !r.startsWith('//') ? r : '/app');
+let erro = '';
+let email = '';
+
+if (Astro.locals.user) return Astro.redirect(destino(Astro.url.searchParams.get('r')));
+
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  email = String(fd.get('email') || '');
+  const s = iniciarSessao(email, String(fd.get('password') || ''), Astro.locals.ip);
+  if (s) {
+    Astro.cookies.set(COOKIE_SESSAO, s.token, opcoesCookie(s.expira));
+    return Astro.redirect(destino(String(fd.get('r') || '')));
+  }
+  erro = 'E-mail ou palavra-passe incorrectos.';
+  Astro.response.status = 401;
+}
+---
+<Base title="Entrar · Expo Connect Angola">
+  <main id="conteudo" class="login">
+    <div class="topo"><a href="/">← Voltar ao site</a><A11y /></div>
+    <div class="card caixa">
+      <img src="/logo.png" alt="Expo Connect Angola" width="88" height="88" />
+      <h1>Área reservada</h1>
+      <p class="hint">Acesso para técnicos, analistas, gestores e beneficiários registados.</p>
+      {erro && <div class="alerta alerta--erro" role="alert">{erro}</div>}
+      <form method="post" class="stack">
+        <input type="hidden" name="r" value={Astro.url.searchParams.get('r') || ''} />
+        <label class="field"><span>E-mail</span><input type="email" name="email" value={email} autocomplete="username" required autofocus /></label>
+        <label class="field"><span>Palavra-passe</span><input type="password" name="password" autocomplete="current-password" required /></label>
+        <button class="btn" type="submit" style="width:100%">Entrar</button>
+      </form>
+    </div>
+  </main>
+</Base>
+
+<style>
+  .login { min-height: 100vh; display: grid; place-items: center; padding: 16px; align-content: center; gap: 1rem; }
+  .topo { width: min(420px, 100%); display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .caixa { width: min(420px, 100%); text-align: center; padding: 2rem; }
+  .caixa img { border-radius: 18px; margin-bottom: .75rem; }
+  .caixa h1 { font-size: 1.6rem; }
+  form { text-align: left; margin-top: 1.25rem; }
+</style>

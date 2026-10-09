@@ -1,0 +1,151 @@
+---
+// Formulário de registo/edição de beneficiário (módulos 5.1 a 5.6).
+import {
+  NOMES_PROVINCIAS, SEXOS, CONDICOES, FUNCIONALIDADE, PRODUTOS, INTENCAO, CAUSAS, TIPOS_DEFICIENCIA, GRAUS,
+  NIVEIS_ACADEMICOS, SITUACOES_PROFISSIONAIS, MARGENS_SALARIAIS, FONTES_RENDIMENTO,
+} from '../lib/constantes.js';
+
+interface Props { v?: Record<string, any>; erros?: Record<string, string>; aviso?: string; botao?: string; cancelar?: string; }
+const { v = {}, erros = {}, aviso, botao = 'Gravar registo', cancelar = '/app/beneficiarios' } = Astro.props;
+const val = (k: string) => v[k] ?? '';
+const inv = (k: string) => (erros[k] ? 'true' : undefined);
+const temErros = Object.keys(erros).length > 0;
+---
+<form method="post" class="form-registo" novalidate>
+  {temErros && <div class="alerta alerta--erro" role="alert">Há {Object.keys(erros).length} campo(s) a corrigir. Reveja os campos assinalados.</div>}
+  {aviso && <div class="alerta alerta--aviso" role="alert">{aviso}</div>}
+
+  <fieldset class="card">
+    <legend>1. Identificação</legend>
+    <div class="cols">
+      <label class="field col-2"><span>Nome completo *</span>
+        <input type="text" name="nome" value={val('nome')} required autocomplete="off" aria-invalid={inv('nome')} aria-describedby={erros.nome ? 'e-nome' : undefined} />
+        {erros.nome && <span class="erro" id="e-nome">{erros.nome}</span>}
+      </label>
+      <label class="field"><span>Sexo</span>
+        <select name="sexo"><option value="">—</option>{SEXOS.map((s) => <option selected={val('sexo') === s}>{s}</option>)}</select>
+      </label>
+      <label class="field"><span>Data de nascimento</span>
+        <input type="date" name="data_nascimento" value={val('data_nascimento')} aria-invalid={inv('data_nascimento')} />
+        {erros.data_nascimento ? <span class="erro">{erros.data_nascimento}</span> : <span class="hint">A partir dos 60 anos é marcado como idoso.</span>}
+      </label>
+      <label class="field"><span>N.º do Bilhete de Identidade</span>
+        <input type="text" name="bi" value={val('bi')} autocomplete="off" spellcheck="false" aria-invalid={inv('bi')} />
+        {erros.bi ? <span class="erro">{erros.bi}</span> : <span class="hint">Guardado de forma encriptada.</span>}
+      </label>
+      <label class="field"><span>Telefone</span>
+        <input type="tel" name="telefone" value={val('telefone')} placeholder="+244 9xx xxx xxx" aria-invalid={inv('telefone')} />
+        {erros.telefone && <span class="erro">{erros.telefone}</span>}
+      </label>
+      <label class="field"><span>E-mail</span>
+        <input type="email" name="email" value={val('email')} aria-invalid={inv('email')} />
+        {erros.email && <span class="erro">{erros.email}</span>}
+      </label>
+      <label class="field"><span>Província</span>
+        <select name="provincia"><option value="">—</option>{NOMES_PROVINCIAS.map((p) => <option selected={val('provincia') === p}>{p}</option>)}</select>
+      </label>
+      <label class="field"><span>Município</span><input type="text" name="municipio" value={val('municipio')} /></label>
+      <label class="field"><span>Bairro</span><input type="text" name="bairro" value={val('bairro')} /></label>
+      <label class="field col-2"><span>Morada</span><input type="text" name="morada" value={val('morada')} /></label>
+    </div>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>2. Condição pessoal</legend>
+    <div class="checks">
+      {Object.entries(CONDICOES).map(([k, rot]) => (
+        <label class="check"><input type="checkbox" name={k} value="1" checked={!!v[k]} /><span>{rot}</span></label>
+      ))}
+    </div>
+    <p class="sub">Deficiência e causa</p>
+    <div class="cols">
+      <label class="field"><span>Tipo de deficiência</span>
+        <select name="tipo_deficiencia"><option value="">—</option>{TIPOS_DEFICIENCIA.map((t) => <option selected={val('tipo_deficiencia') === t}>{t}</option>)}</select>
+      </label>
+      <label class="field"><span>Origem</span>
+        <select name="origem"><option value="">—</option>{['Congénita', 'Adquirida'].map((t) => <option selected={val('origem') === t}>{t}</option>)}</select>
+      </label>
+      <label class="field"><span>Causa</span>
+        <select name="causa"><option value="">—</option>{CAUSAS.map((t) => <option selected={val('causa') === t}>{t}</option>)}</select>
+      </label>
+      <label class="field"><span>Outra causa (descrever)</span>
+        <input type="text" name="causa_outra" value={val('causa_outra')} aria-invalid={inv('causa_outra')} />
+        {erros.causa_outra && <span class="erro">{erros.causa_outra}</span>}
+      </label>
+      <label class="field"><span>Grau</span>
+        <select name="grau"><option value="">—</option>{GRAUS.map((t) => <option selected={val('grau') === t}>{t}</option>)}</select>
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>3. Funcionalidade e autonomia</legend>
+    <div class="checks">
+      {Object.entries(FUNCIONALIDADE).map(([k, rot]) => (
+        <label class="check"><input type="checkbox" name={k} value="1" checked={!!v[k]} /><span>{rot}</span></label>
+      ))}
+    </div>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>4. Situação socioeconómica</legend>
+    <div class="cols">
+      <label class="field"><span>Nível académico</span>
+        <select name="nivel_academico"><option value="">—</option>{NIVEIS_ACADEMICOS.map((t) => <option selected={val('nivel_academico') === t}>{t}</option>)}</select>
+      </label>
+      <label class="field"><span>Sabe ler e escrever?</span>
+        <select name="sabe_ler">
+          <option value="">—</option>
+          <option value="1" selected={v.sabe_ler === 1}>Sim</option>
+          <option value="0" selected={v.sabe_ler === 0}>Não</option>
+        </select>
+      </label>
+      <label class="field"><span>Situação profissional</span>
+        <select name="situacao_profissional"><option value="">—</option>{SITUACOES_PROFISSIONAIS.map((t) => <option selected={val('situacao_profissional') === t}>{t}</option>)}</select>
+      </label>
+      <label class="field"><span>Margem salarial mensal</span>
+        <select name="margem_salarial"><option value="">—</option>{MARGENS_SALARIAIS.map((m) => <option value={m.id} selected={val('margem_salarial') === m.id}>{m.nome}</option>)}</select>
+      </label>
+      <label class="field"><span>Principal fonte de rendimento</span>
+        <select name="fonte_rendimento"><option value="">—</option>{FONTES_RENDIMENTO.map((t) => <option selected={val('fonte_rendimento') === t}>{t}</option>)}</select>
+      </label>
+      <label class="field"><span>N.º de dependentes</span>
+        <input type="number" name="dependentes" min="0" max="50" value={val('dependentes')} />
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>5. Procura de produtos e serviços</legend>
+    <p class="sub" style="margin-top:0">Produtos de apoio necessários</p>
+    <div class="checks">
+      {Object.entries(PRODUTOS).map(([k, rot]) => (
+        <label class="check"><input type="checkbox" name={k} value="1" checked={!!v[k]} /><span>{rot}</span></label>
+      ))}
+    </div>
+    <p class="sub">Intenção de aquisição</p>
+    <div class="checks">
+      {Object.entries(INTENCAO).map(([k, rot]) => (
+        <label class="check"><input type="checkbox" name={k} value="1" checked={!!v[k]} /><span>{rot}</span></label>
+      ))}
+    </div>
+    <label class="field" style="margin-top:1rem"><span>Serviço pretendido / observações</span>
+      <textarea name="servico_pretendido" rows="3">{val('servico_pretendido')}</textarea>
+    </label>
+  </fieldset>
+
+  <fieldset class="card">
+    <legend>6. Consentimento</legend>
+    <label class="check">
+      <input type="checkbox" name="consentimento" value="1" checked={!!v.consentimento} />
+      <span>O beneficiário (ou o seu representante legal) foi informado da finalidade da recolha e <strong>consente</strong> no tratamento dos seus dados pessoais
+        para fins de apoio, estatística e planeamento, nos termos da Lei n.º 22/11 de Protecção de Dados Pessoais.</span>
+    </label>
+    <p class="hint" style="margin-top:.6rem">Sem consentimento o registo fica incompleto e não entra nas estatísticas.</p>
+  </fieldset>
+
+  <div class="form-fim no-print">
+    <button class="btn" type="submit">{botao}</button>
+    <a class="btn btn--ghost" href={cancelar}>Cancelar</a>
+  </div>
+</form>

@@ -1,0 +1,37 @@
+---
+// Mapa de mosaicos das 21 províncias, colorido por escala sequencial.
+import { PROVINCIAS } from '../lib/constantes.js';
+interface Props { dados: { nome: string; valor: number }[]; ligacao?: (prov: string) => string; }
+const { dados = [], ligacao } = Astro.props;
+const valores = new Map(dados.map((d) => [d.nome, d.valor]));
+const max = Math.max(0, ...dados.map((d) => d.valor));
+const nivel = (v: number) => (v === 0 || max === 0 ? 0 : Math.min(5, 1 + Math.floor((v / max) * 4.999)));
+---
+<div class="mapa">
+  <ul class="mosaico" aria-label="Registos por província">
+    {PROVINCIAS.map((p) => {
+      const v = valores.get(p.nome) || 0;
+      const conteudo = <><span class="m-nome">{p.nome}</span><span class="m-valor">{v}</span></>;
+      return (
+        <li style={`grid-column:${p.x + 1};grid-row:${p.y + 1};background:var(--seq-${nivel(v)})`}>
+          {ligacao ? <a href={ligacao(p.nome)}>{conteudo}</a> : <div>{conteudo}</div>}
+        </li>
+      );
+    })}
+  </ul>
+  <p class="legenda" aria-hidden="true">
+    <span>Menos</span>{[0, 1, 2, 3, 4, 5].map((i) => <i style={`background:var(--seq-${i})`}></i>)}<span>Mais</span>
+  </p>
+</div>
+
+<style>
+  .mosaico { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: 64px; gap: 4px; }
+  li { border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
+  li > * { display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 6px; text-decoration: none; color: var(--text); }
+  .m-nome { font-size: .68rem; font-weight: 700; line-height: 1.1; background: var(--surface); border-radius: 4px; padding: 1px 4px; align-self: flex-start; max-width: 100%; }
+  .m-valor { font-size: .85rem; font-weight: 800; background: var(--surface); border-radius: 4px; padding: 0 5px; align-self: flex-end; font-variant-numeric: tabular-nums; }
+  a:hover { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .legenda { display: flex; align-items: center; gap: 3px; font-size: .75rem; color: var(--muted); margin: .75rem 0 0; }
+  .legenda i { width: 22px; height: 10px; border-radius: 2px; border: 1px solid var(--border); }
+  .legenda span { margin: 0 .3rem; }
+</style>

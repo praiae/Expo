@@ -1,0 +1,32 @@
+---
+import A11y from './A11y.astro';
+const user = Astro.locals.user;
+---
+<header class="site">
+  <div class="container site-barra">
+    <a class="site-marca" href="/"><img src="/logo.png" alt="" width="44" height="44" /><span>Expo Connect <b>Angola</b></span></a>
+    <nav aria-label="Site" class="site-nav">
+      <a href="/#missao">Missão</a>
+      <a href="/#como">Como funciona</a>
+      <a href="/privacidade">Privacidade</a>
+      <a href="/#contacto">Contacto</a>
+    </nav>
+    <div class="site-accoes">
+      <A11y />
+      <a class="btn btn--sm" href="/app">{user ? 'Abrir plataforma' : 'Entrar'}</a>
+    </div>
+  </div>
+</header>
+
+<style>
+  .site { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
+  .site-barra { display: flex; align-items: center; gap: 1.25rem; padding: .7rem 0; flex-wrap: wrap; }
+  .site-marca { display: flex; align-items: center; gap: .6rem; color: var(--text); text-decoration: none; font-weight: 700; font-size: 1.1rem; }
+  .site-marca img { border-radius: 10px; }
+  .site-marca b { color: var(--accent-2); font-weight: 800; }
+  .site-nav { display: flex; gap: 1.1rem; }
+  .site-nav a { color: var(--text-2); text-decoration: none; font-weight: 600; font-size: .93rem; }
+  .site-nav a:hover { color: var(--text); text-decoration: underline; }
+  .site-accoes { margin-left: auto; display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+  @media (max-width: 860px) { .site-nav { order: 3; width: 100%; overflow-x: auto; padding-bottom: .2rem; } }
+</style>

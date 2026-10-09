@@ -1,0 +1,80 @@
+---
+import App from '../../layouts/App.astro';
+import Barras from '../../components/Barras.astro';
+import Colunas from '../../components/Colunas.astro';
+import MapaProvincias from '../../components/MapaProvincias.astro';
+import { calcularEstatisticas, contagemPendentes, fmt, pct } from '../../lib/estatisticas.js';
+import { pode } from '../../lib/constantes.js';
+
+const user = Astro.locals.user;
+const e = calcularEstatisticas();
+const t = e.totais;
+const pend = contagemPendentes();
+const verRegistos = pode(user, 'beneficiarios.ver');
+const ligProv = verRegistos ? (p: string) => `/app/beneficiarios?provincia=${encodeURIComponent(p)}` : undefined;
+---
+<App title="Painel" ativo="painel" subtitulo="Indicadores calculados apenas sobre registos validados.">
+  <Fragment slot="accoes">
+    {pode(user, 'beneficiarios.editar') && <a class="btn" href="/app/beneficiarios/novo">+ Novo registo</a>}
+    {pode(user, 'relatorios') && <a class="btn btn--ghost" href="/app/relatorios">Relatórios</a>}
+  </Fragment>
+
+  {verRegistos && (pend.pendentes > 0 || pend.incompletos > 0) && (
+    <div class="alerta alerta--aviso">
+      <strong>{fmt(pend.pendentes)}</strong> registo(s) a aguardar validação, dos quais <strong>{fmt(pend.incompletos)}</strong> incompleto(s).
+      <a href="/app/beneficiarios?estado=pendente">Rever pendentes →</a>
+    </div>
+  )}
+
+  <section class="kpis" aria-label="Totais">
+    <div class="kpi"><p class="kpi-rot">Beneficiários validados</p><p class="kpi-valor">{fmt(t.total)}</p><p class="kpi-nota">de {fmt(pend.total)} registados</p></div>
+    <div class="kpi"><p class="kpi-rot">Pessoas com deficiência</p><p class="kpi-valor">{fmt(t.pcd)}</p><p class="kpi-nota">{pct(t.pcd, t.total)} do total</p></div>
+    <div class="kpi"><p class="kpi-rot">Idosos</p><p class="kpi-valor">{fmt(t.idosos)}</p><p class="kpi-nota">{fmt(t.idososMobReduzida)} com mobilidade reduzida</p></div>
+    <div class="kpi"><p class="kpi-rot">Cadeirantes</p><p class="kpi-valor">{fmt(t.cadeirantes)}</p><p class="kpi-nota">{fmt(t.muletas)} utilizam muletas</p></div>
+    <div class="kpi"><p class="kpi-rot">Cegueira / baixa visão</p><p class="kpi-valor">{fmt(t.cegos + t.baixaVisao)}</p><p class="kpi-nota">{fmt(t.cegos)} cegos · {fmt(t.baixaVisao)} baixa visão</p></div>
+  </section>
+
+  <section class="kpis" aria-label="Prioridades">
+    <a class="kpi kpi--p1" href={verRegistos ? '/app/prioridades?prioridade=1' : undefined} style="text-decoration:none;color:inherit">
+      <p class="kpi-rot">Prioridade 1 · Urgente</p><p class="kpi-valor">{fmt(t.p1)}</p><p class="kpi-nota">{pct(t.p1, t.total)}</p></a>
+    <a class="kpi kpi--p2" href={verRegistos ? '/app/prioridades?prioridade=2' : undefined} style="text-decoration:none;color:inherit">
+      <p class="kpi-rot">Prioridade 2 · Moderada</p><p class="kpi-valor">{fmt(t.p2)}</p><p class="kpi-nota">{pct(t.p2, t.total)}</p></a>
+    <a class="kpi kpi--p3" href={verRegistos ? '/app/prioridades?prioridade=3' : undefined} style="text-decoration:none;color:inherit">
+      <p class="kpi-rot">Prioridade 3 · Futura</p><p class="kpi-valor">{fmt(t.p3)}</p><p class="kpi-nota">{pct(t.p3, t.total)}</p></a>
+    <div class="kpi"><p class="kpi-rot">Compra imediata</p><p class="kpi-valor">{fmt(t.compraImediata)}</p><p class="kpi-nota">{fmt(t.apoioSocial)} precisam de apoio social</p></div>
+  </section>
+
+  <div class="paineis">
+    <section class="card painel">
+      <h2>Distribuição territorial</h2>
+      <MapaProvincias dados={e.porProvincia} ligacao={ligProv} />
+    </section>
+    <section class="card painel">
+      <h2>Por categoria</h2>
+      <Barras dados={e.porCategoria} total={t.total} rotulo="Beneficiários por categoria" />
+      <h2 style="margin-top:1.5rem">Procura de produtos de apoio</h2>
+      <Barras dados={e.procura} cor="var(--series-2)" total={t.total} rotulo="Procura por produto" />
+    </section>
+  </div>
+
+  <div class="paineis">
+    <section class="card painel">
+      <h2>Onde se concentra a maior necessidade</h2>
+      {e.necessidade.length === 0 ? <p class="vazio">Sem casos de prioridade 1.</p> : (
+        <div class="tabela-wrap">
+          <table>
+            <caption class="sr-only">Casos urgentes por município</caption>
+            <thead><tr><th>Província</th><th>Município</th><th class="num">Casos P1</th></tr></thead>
+            <tbody>{e.necessidade.map((r) => <tr><td>{r.provincia ?? '—'}</td><td>{r.municipio ?? '—'}</td><td class="num">{r.n}</td></tr>)}</tbody>
+          </table>
+        </div>
+      )}
+    </section>
+    <section class="card painel">
+      <h2>Novos registos por mês</h2>
+      <Colunas dados={e.mensal} rotulo="Registos validados por mês de registo" />
+      <h2 style="margin-top:1.5rem">Faixa etária</h2>
+      <Barras dados={e.faixas} cor="var(--series-7)" total={t.total} rotulo="Beneficiários por faixa etária" />
+    </section>
+  </div>
+</App>

@@ -1,0 +1,57 @@
+---
+// Barra de acessibilidade: tema, alto contraste e tamanho do texto (guardados no navegador).
+---
+<div class="a11y no-print" role="group" aria-label="Preferências de leitura">
+  <button type="button" class="a11y-btn" data-pref="ec-tema" data-valores="light,dark" aria-pressed="false">
+    <span aria-hidden="true">◐</span><span class="a11y-rot">Tema escuro</span>
+  </button>
+  <button type="button" class="a11y-btn" data-pref="ec-contraste" data-valores=",alto" aria-pressed="false">
+    <span aria-hidden="true">◑</span><span class="a11y-rot">Alto contraste</span>
+  </button>
+  <button type="button" class="a11y-btn" data-pref="ec-fonte" data-valores=",grande" aria-pressed="false">
+    <span aria-hidden="true">A+</span><span class="a11y-rot">Texto maior</span>
+  </button>
+</div>
+
+<script>
+  const ATRIB: Record<string, string> = { 'ec-tema': 'theme', 'ec-contraste': 'contrast', 'ec-fonte': 'fonte' };
+  function gravar(k: string, v: string) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {} }
+  function actual(k: string) {
+    const d = document.documentElement.dataset[ATRIB[k]];
+    if (k === 'ec-tema' && !d) return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return d || '';
+  }
+  function sincronizar() {
+    document.querySelectorAll<HTMLButtonElement>('.a11y-btn').forEach((b) => {
+      const k = b.dataset.pref!;
+      const ligado = k === 'ec-tema' ? actual(k) === 'dark' : !!actual(k);
+      b.setAttribute('aria-pressed', String(ligado));
+    });
+  }
+  function iniciar() {
+    document.querySelectorAll<HTMLButtonElement>('.a11y-btn').forEach((b) => {
+      if (b.dataset.ligado) return;
+      b.dataset.ligado = '1';
+      b.addEventListener('click', () => {
+        const k = b.dataset.pref!;
+        const [a, c] = b.dataset.valores!.split(',');
+        const novo = actual(k) === c ? a : c;
+        const el = document.documentElement;
+        if (novo) el.dataset[ATRIB[k]] = novo; else delete el.dataset[ATRIB[k]];
+        gravar(k, novo);
+        sincronizar();
+      });
+    });
+    sincronizar();
+  }
+  iniciar();
+  document.addEventListener('astro:page-load', iniciar);
+</script>
+
+<style>
+  .a11y { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .a11y-btn { display: inline-flex; align-items: center; gap: .35rem; min-height: 36px; padding: .3rem .7rem; border-radius: 999px;
+    border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }
+  .a11y-btn[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+  @media (max-width: 640px) { .a11y-rot { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
+</style>

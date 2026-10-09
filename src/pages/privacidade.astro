@@ -1,0 +1,44 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+---
+<Base title="Política de privacidade · Expo Connect Angola">
+  <SiteHeader />
+  <main id="conteudo" class="container texto">
+    <span class="eyebrow">Protecção de dados</span>
+    <h1>Política de privacidade</h1>
+    <p>A Expo Connect Angola trata dados pessoais nos termos da Lei n.º 22/11, de 17 de Junho (Lei da Protecção de Dados Pessoais).</p>
+
+    <h2>Que dados recolhemos</h2>
+    <p>Identificação e contactos, localização, condição pessoal e funcionalidade, situação socioeconómica e necessidades de produtos de apoio.
+      Os dados são recolhidos por técnicos credenciados e apenas com o consentimento do titular ou do seu representante legal.</p>
+
+    <h2>Para que servem</h2>
+    <ul>
+      <li>Identificar e priorizar pessoas que precisam de apoio;</li>
+      <li>Produzir estatísticas agregadas por província, município, categoria e necessidade;</li>
+      <li>Planear a produção e distribuição de produtos de apoio.</li>
+    </ul>
+
+    <h2>Como os protegemos</h2>
+    <ul>
+      <li>O número do BI, o telefone, o e-mail e a morada são guardados encriptados.</li>
+      <li>O acesso é feito por perfis: cada utilizador vê apenas o necessário à sua função.</li>
+      <li>As consultas de dados pessoais e as exportações ficam registadas em auditoria.</li>
+      <li>As estatísticas e relatórios públicos nunca identificam pessoas.</li>
+    </ul>
+
+    <h2>Os seus direitos</h2>
+    <p>Pode, a qualquer momento, aceder aos seus dados, pedir a sua correcção, retirar o consentimento ou pedir o apagamento do registo.
+      Use o <a href="/#contacto">formulário de contacto</a> ou fale com o técnico que efectuou o registo.</p>
+  </main>
+  <SiteFooter />
+</Base>
+
+<style>
+  .texto { max-width: 760px; padding-top: 3rem; }
+  .texto h1 { font-size: clamp(1.8rem, 4vw, 2.6rem); }
+  .texto h2 { font-size: 1.25rem; margin-top: 2rem; }
+  .texto li { margin-bottom: .35rem; }
+</style>

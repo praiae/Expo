@@ -1,0 +1,32 @@
+---
+import App from '../../layouts/App.astro';
+import { db, DB_PATH, auditar } from '../../lib/db.js';
+import { readFileSync, rmSync, statSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+
+const user = Astro.locals.user;
+if (Astro.request.method === 'POST') {
+  // VACUUM INTO produz uma cópia consistente mesmo com a base em uso.
+  const tmp = join(dirname(DB_PATH), `backup-${Date.now()}.db`);
+  db().exec(`VACUUM INTO '${tmp.replace(/'/g, "''")}'`);
+  const dados = readFileSync(tmp);
+  rmSync(tmp, { force: true });
+  auditar(user, 'Cópia de segurança descarregada', null, Astro.locals.ip);
+  const data = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  return new Response(dados, {
+    headers: { 'Content-Type': 'application/vnd.sqlite3', 'Content-Disposition': `attachment; filename="expo-connect-${data}.db"` },
+  });
+}
+const tamanho = (statSync(DB_PATH).size / 1024 / 1024).toFixed(2).replace('.', ',');
+const n = db().prepare('SELECT (SELECT COUNT(*) FROM pessoas) p, (SELECT COUNT(*) FROM utilizadores) u, (SELECT COUNT(*) FROM auditoria) a').get();
+---
+<App title="Cópia de segurança" ativo="backup">
+  <section class="card" style="max-width:640px">
+    <p>Base de dados actual: <strong>{tamanho} MB</strong> · {n.p} beneficiários · {n.u} utilizadores · {n.a} entradas de auditoria.</p>
+    <div class="alerta alerta--aviso">
+      Os campos BI, telefone, e-mail e morada estão encriptados. Para restaurar a cópia é necessária a mesma chave
+      (<code>APP_SECRET</code> ou o ficheiro <code>data/secret.key</code>) — guarde-a em local seguro e separado da cópia.
+    </div>
+    <form method="post"><button class="btn" type="submit">Descarregar cópia (.db)</button></form>
+  </section>
+</App>

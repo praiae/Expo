@@ -1,0 +1,21 @@
+{
+  "name": "expo-connect-angola",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Plataforma de acessibilidade e inclusão — estatística, procura e prioridade.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env node_modules/astro/bin/astro.mjs dev",
+    "build": "node --env-file-if-exists=.env node_modules/astro/bin/astro.mjs build",
+    "preview": "node --env-file-if-exists=.env node_modules/astro/bin/astro.mjs preview",
+    "start": "node --env-file-if-exists=.env ./dist/server/entry.mjs",
+    "seed": "node --env-file-if-exists=.env scripts/seed.js"
+  },
+  "dependencies": {
+    "@astrojs/node": "^11.1.7",
+    "astro": "^7.3.8"
+  }
+}

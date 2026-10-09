@@ -1,0 +1,29 @@
+---
+import App from '../../layouts/App.astro';
+import { db } from '../../lib/db.js';
+
+if (Astro.request.method === 'POST') {
+  const fd = await Astro.request.formData();
+  if (fd.get('accao') === 'apagar') db().prepare('DELETE FROM contactos WHERE id = ?').run(Number(fd.get('id')));
+}
+const lista = db().prepare('SELECT * FROM contactos ORDER BY id DESC LIMIT 200').all();
+---
+<App title="Contactos recebidos" ativo="contactos" subtitulo="Mensagens enviadas pelo formulário do site público.">
+  {lista.length === 0 ? <p class="vazio">Sem mensagens.</p> : (
+    <div class="stack">
+      {lista.map((c) => (
+        <article class="card">
+          <div class="linha-accoes" style="justify-content:space-between">
+            <div><strong>{c.nome || 'Sem nome'}</strong> · <a href={`mailto:${c.email}`}>{c.email}</a>{c.organizacao && <span class="hint"> · {c.organizacao}</span>}</div>
+            <span class="hint mono">{c.criado_em}</span>
+          </div>
+          <p style="white-space:pre-wrap;margin:.75rem 0">{c.mensagem}</p>
+          <form method="post" onsubmit="return confirm('Apagar esta mensagem?')">
+            <input type="hidden" name="accao" value="apagar" /><input type="hidden" name="id" value={c.id} />
+            <button class="btn btn--ghost btn--sm" type="submit">Apagar</button>
+          </form>
+        </article>
+      ))}
+    </div>
+  )}
+</App>

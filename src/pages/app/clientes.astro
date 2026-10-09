@@ -1,0 +1,64 @@
+---
+import App from '../../layouts/App.astro';
+import Barras from '../../components/Barras.astro';
+import { db } from '../../lib/db.js';
+import { lerFiltros, construirWhere, queryString } from '../../lib/filtros.js';
+import { fmt } from '../../lib/estatisticas.js';
+import { pode, NOMES_PROVINCIAS, PRODUTOS, INTENCAO, MARGENS_SALARIAIS } from '../../lib/constantes.js';
+
+// Procura de produtos: potenciais clientes validados com pelo menos um produto assinalado.
+const user = Astro.locals.user;
+const f = lerFiltros(Astro.url);
+const intencao = Astro.url.searchParams.get('intencao') || '';
+const { sql, args } = construirWhere(f, { apenasValidados: true });
+const algumProduto = `(${Object.keys(PRODUTOS).map((k) => `${k} = 1`).join(' OR ')})`;
+const extra = [algumProduto, INTENCAO[intencao] ? `${intencao} = 1` : null].filter(Boolean).join(' AND ');
+const where = `${sql} ${sql ? 'AND' : 'WHERE'} ${extra}`;
+const linhas = db().prepare(`SELECT * FROM v_pessoas ${where} ORDER BY compra_imediata DESC, prioridade ASC, nome LIMIT 300`).all(...args);
+const total = db().prepare(`SELECT COUNT(*) n FROM v_pessoas ${where}`).get(...args).n;
+const porProduto = Object.entries(PRODUTOS).map(([k, nome]) => ({
+  nome, valor: db().prepare(`SELECT COUNT(*) n FROM v_pessoas ${where} AND ${k} = 1`).get(...args).n,
+}));
+const margem = (id: string) => MARGENS_SALARIAIS.find((m) => m.id === id)?.nome ?? '—';
+---
+<App title="Procura de produtos" ativo="clientes" subtitulo={`${fmt(total)} potencial(is) cliente(s) com procura registada`}>
+  <Fragment slot="accoes">
+    {pode(user, 'exportar.identificado') && <a class="btn btn--ghost" href={`/app/exportar${queryString({ ...f, intencao }, { tipo: 'clientes' })}`}>Exportar Excel</a>}
+  </Fragment>
+
+  <form method="get" class="filtros card no-print" aria-label="Filtros">
+    <label class="field"><span>Intenção</span>
+      <select name="intencao"><option value="">Todas</option>{Object.entries(INTENCAO).map(([k, r]) => <option value={k} selected={intencao === k}>{r}</option>)}</select>
+    </label>
+    <label class="field"><span>Produto</span>
+      <select name="produto"><option value="">Todos</option>{Object.entries(PRODUTOS).map(([k, r]) => <option value={k} selected={f.produto === k}>{r}</option>)}</select>
+    </label>
+    <label class="field"><span>Província</span><select name="provincia"><option value="">Todas</option>{NOMES_PROVINCIAS.map((n) => <option selected={f.provincia === n}>{n}</option>)}</select></label>
+    <div class="filtros-accoes"><button class="btn" type="submit">Filtrar</button><a class="btn btn--ghost" href="/app/clientes">Limpar</a></div>
+  </form>
+
+  <section class="card painel" style="margin-bottom:1rem">
+    <h2 style="font-size:1.05rem">Unidades procuradas</h2>
+    <Barras dados={porProduto} cor="var(--series-2)" total={total} rotulo="Procura por produto" />
+  </section>
+
+  {linhas.length === 0 ? <p class="vazio">Sem procura registada para estes critérios.</p> : (
+    <div class="tabela-wrap">
+      <table>
+        <caption class="sr-only">Potenciais clientes</caption>
+        <thead><tr><th>Nome</th><th>Província</th><th>Produtos</th><th>Intenção</th><th>Rendimento</th></tr></thead>
+        <tbody>
+          {linhas.map((r) => (
+            <tr>
+              <td><a href={`/app/beneficiarios/${r.id}`}>{r.nome}</a></td>
+              <td>{r.provincia ?? '—'}</td>
+              <td>{Object.entries(PRODUTOS).filter(([k]) => r[k]).map(([, n]) => n).join(', ')}</td>
+              <td>{Object.entries(INTENCAO).filter(([k]) => r[k]).map(([, n]) => n).join(', ') || '—'}</td>
+              <td class="hint">{margem(r.margem_salarial)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</App>

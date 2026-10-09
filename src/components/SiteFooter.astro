@@ -1,0 +1,15 @@
+---
+const ano = new Date().getFullYear();
+---
+<footer class="site">
+  <div class="container rodape">
+    <p><strong>Expo Connect Angola</strong> — acessibilidade, inclusão e dados ao serviço das pessoas.</p>
+    <p class="hint">© {ano} Expo Connect Angola · <a href="/privacidade">Política de privacidade</a> · <a href="/app">Área reservada</a></p>
+  </div>
+</footer>
+
+<style>
+  .site { border-top: 1px solid var(--border); background: var(--surface); margin-top: 4rem; }
+  .rodape { padding: 2rem 0; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .rodape p { margin: 0; }
+</style>
