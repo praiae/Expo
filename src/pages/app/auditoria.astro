@@ -5,10 +5,10 @@ import { db } from '../../lib/db.js';
 const q = (Astro.url.searchParams.get('q') || '').trim();
 const POR_PAGINA = 100;
 const pagina = Math.max(1, parseInt(Astro.url.searchParams.get('p') || '1', 10) || 1);
-const where = q ? `WHERE a.acao LIKE ?1 OR a.alvo LIKE ?1 OR u.nome LIKE ?1 OR u.email LIKE ?1` : '';
+const where = q ? `WHERE a.acao ILIKE ?1 OR a.alvo ILIKE ?1 OR u.nome ILIKE ?1 OR u.email ILIKE ?1` : '';
 const args = q ? [`%${q}%`] : [];
-const linhas = db().prepare(`SELECT a.*, u.nome, u.email FROM auditoria a LEFT JOIN utilizadores u ON u.id = a.utilizador_id
-  ${where} ORDER BY a.id DESC LIMIT ${POR_PAGINA + 1} OFFSET ${(pagina - 1) * POR_PAGINA}`).all(...args);
+const linhas = await db.all(`SELECT a.*, u.nome, u.email FROM auditoria a LEFT JOIN utilizadores u ON u.id = a.utilizador_id
+  ${where} ORDER BY a.id DESC LIMIT ${POR_PAGINA + 1} OFFSET ${(pagina - 1) * POR_PAGINA}`, ...args);
 const haMais = linhas.length > POR_PAGINA;
 const qs = (p: number) => `?${new URLSearchParams({ ...(q ? { q } : {}), p: String(p) })}`;
 ---

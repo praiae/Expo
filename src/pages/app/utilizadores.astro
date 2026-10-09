@@ -20,30 +20,29 @@ if (Astro.request.method === 'POST') {
     const role = String(fd.get('role'));
     const pessoaId = Number(fd.get('pessoa_id')) || null;
     if (!nome || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !PERFIS[role]) erro = 'Preencha nome, e-mail válido e perfil.';
-    else if (db().prepare('SELECT 1 FROM utilizadores WHERE email = ?').get(email)) erro = 'Já existe um utilizador com esse e-mail.';
-    else if (role === 'externo' && (!pessoaId || !db().prepare('SELECT 1 FROM pessoas WHERE id = ?').get(pessoaId))) erro = 'Utilizadores externos têm de estar associados a um registo de beneficiário existente.';
+    else if (await db.get('SELECT 1 FROM utilizadores WHERE lower(email) = lower(?)', email)) erro = 'Já existe um utilizador com esse e-mail.';
+    else if (role === 'externo' && (!pessoaId || !await db.get('SELECT 1 FROM pessoas WHERE id = ?', pessoaId))) erro = 'Utilizadores externos têm de estar associados a um registo de beneficiário existente.';
     else {
       senhaGerada = gerar();
-      db().prepare('INSERT INTO utilizadores (nome, email, password_hash, role, pessoa_id) VALUES (?, ?, ?, ?, ?)')
-        .run(nome, email, hashPassword(senhaGerada), role, role === 'externo' ? pessoaId : null);
-      auditar(user, 'Criação de utilizador', `${email} (${role})`, Astro.locals.ip);
+      await db.run('INSERT INTO utilizadores (nome, email, password_hash, role, pessoa_id) VALUES (?, ?, ?, ?, ?)', nome, email, hashPassword(senhaGerada), role, role === 'externo' ? pessoaId : null);
+      await auditar(user, 'Criação de utilizador', `${email} (${role})`, Astro.locals.ip);
       ok = `Utilizador ${email} criado. Palavra-passe temporária:`;
     }
   } else if (id && id !== user.id) {
     if (accao === 'alternar') {
-      db().prepare('UPDATE utilizadores SET ativo = 1 - ativo WHERE id = ?').run(id);
-      db().prepare('DELETE FROM sessoes WHERE utilizador_id = ?').run(id);
-      auditar(user, 'Activação/desactivação de utilizador', `utilizador:${id}`, Astro.locals.ip);
+      await db.run('UPDATE utilizadores SET ativo = 1 - ativo WHERE id = ?', id);
+      await db.run('DELETE FROM sessoes WHERE utilizador_id = ?', id);
+      await auditar(user, 'Activação/desactivação de utilizador', `utilizador:${id}`, Astro.locals.ip);
       ok = 'Estado do utilizador actualizado.';
     } else if (accao === 'repor') {
       senhaGerada = gerar();
-      db().prepare('UPDATE utilizadores SET password_hash = ? WHERE id = ?').run(hashPassword(senhaGerada), id);
-      db().prepare('DELETE FROM sessoes WHERE utilizador_id = ?').run(id);
-      auditar(user, 'Reposição de palavra-passe', `utilizador:${id}`, Astro.locals.ip);
+      await db.run('UPDATE utilizadores SET password_hash = ? WHERE id = ?', hashPassword(senhaGerada), id);
+      await db.run('DELETE FROM sessoes WHERE utilizador_id = ?', id);
+      await auditar(user, 'Reposição de palavra-passe', `utilizador:${id}`, Astro.locals.ip);
       ok = 'Palavra-passe reposta. Nova palavra-passe temporária:';
     } else if (accao === 'perfil' && PERFIS[String(fd.get('role'))] && fd.get('role') !== 'externo') {
-      db().prepare('UPDATE utilizadores SET role = ? WHERE id = ? AND role != ?').run(String(fd.get('role')), id, 'externo');
-      auditar(user, 'Alteração de perfil', `utilizador:${id} → ${fd.get('role')}`, Astro.locals.ip);
+      await db.run('UPDATE utilizadores SET role = ? WHERE id = ? AND role != ?', String(fd.get('role')), id, 'externo');
+      await auditar(user, 'Alteração de perfil', `utilizador:${id} → ${fd.get('role')}`, Astro.locals.ip);
       ok = 'Perfil actualizado.';
     }
   } else if (id === user.id) {
@@ -51,9 +50,9 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const lista = db().prepare(`SELECT u.*, p.nome pessoa_nome,
+const lista = await db.all(`SELECT u.*, p.nome pessoa_nome,
   (SELECT MAX(criado_em) FROM auditoria a WHERE a.utilizador_id = u.id AND a.acao = 'Início de sessão') ultimo
-  FROM utilizadores u LEFT JOIN pessoas p ON p.id = u.pessoa_id ORDER BY u.ativo DESC, u.role, u.nome`).all();
+  FROM utilizadores u LEFT JOIN pessoas p ON p.id = u.pessoa_id ORDER BY u.ativo DESC, u.role, u.nome`);
 const PERFIS_INTERNOS = Object.entries(PERFIS).filter(([k]) => k !== 'externo');
 ---
 <App title="Utilizadores" ativo="utilizadores" subtitulo="Contas de acesso e perfis de permissão.">

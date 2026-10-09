@@ -10,9 +10,9 @@ import { PRIORIDADES } from '../../lib/constantes.js';
 // Fila de atendimento: registos validados, ordenados por pontuação.
 const f = lerFiltros(Astro.url);
 const { sql, args } = construirWhere(f, { apenasValidados: true });
-const params = parametrosPrioridade();
-const linhas = db().prepare(`SELECT * FROM v_pessoas ${sql} ORDER BY prioridade ASC, prioridade_pontos DESC, criado_em ASC LIMIT 200`).all(...args);
-const contagem = db().prepare(`SELECT prioridade, COUNT(*) n FROM v_pessoas ${sql} GROUP BY prioridade`).all(...args);
+const params = await parametrosPrioridade();
+const linhas = await db.all(`SELECT * FROM v_pessoas ${sql} ORDER BY prioridade ASC, prioridade_pontos DESC, criado_em ASC LIMIT 200`, ...args);
+const contagem = await db.all(`SELECT prioridade, COUNT(*) n FROM v_pessoas ${sql} GROUP BY prioridade`, ...args);
 const n = (p: number) => contagem.find((c) => c.prioridade === p)?.n || 0;
 ---
 <App title="Prioridades de atendimento" ativo="prioridades"

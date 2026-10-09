@@ -24,13 +24,13 @@ if (Astro.request.method === 'POST') {
   }
   if (novo.limiar_p1 <= novo.limiar_p2) erro = 'O limiar da prioridade 1 tem de ser superior ao da prioridade 2.';
   else {
-    db().prepare('UPDATE parametros SET valor = ? WHERE chave = ?').run(JSON.stringify(novo), 'prioridade');
-    const n = recalcularTodos();
-    auditar(user, 'Alteração de parâmetros de prioridade', JSON.stringify(novo), Astro.locals.ip);
+    await db.run('UPDATE parametros SET valor = ? WHERE chave = ?', JSON.stringify(novo), 'prioridade');
+    const n = await recalcularTodos();
+    await auditar(user, 'Alteração de parâmetros de prioridade', JSON.stringify(novo), Astro.locals.ip);
     ok = `Parâmetros guardados. ${n} registo(s) reclassificado(s).`;
   }
 }
-const p = parametrosPrioridade();
+const p = await parametrosPrioridade();
 const max = Object.values(p.pesos).reduce((s, v) => s + Number(v), 0);
 ---
 <App title="Parâmetros de prioridade" ativo="parametros" subtitulo="Pesos usados na classificação automática. Ao guardar, todos os registos são reclassificados.">

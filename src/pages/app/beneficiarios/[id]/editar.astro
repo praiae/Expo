@@ -5,7 +5,7 @@ import { lerFormulario, validarFormulario, biDuplicado, gravarPessoa, obterPesso
 import { auditar } from '../../../../lib/db.js';
 
 const id = Number(Astro.params.id);
-const actual = Number.isInteger(id) ? obterPessoa(id) : null;
+const actual = Number.isInteger(id) ? await obterPessoa(id) : null;
 if (!actual) return new Response('Registo não encontrado.', { status: 404 });
 
 let v: Record<string, any> = actual;
@@ -13,15 +13,15 @@ let erros: Record<string, string> = {};
 if (Astro.request.method === 'POST') {
   v = lerFormulario(await Astro.request.formData());
   erros = validarFormulario(v);
-  const dup = !erros.bi && biDuplicado(v.bi, id);
+  const dup = !erros.bi && await biDuplicado(v.bi, id);
   if (dup) erros.bi = `Já existe outro registo com este BI (n.º ${dup.id}).`;
   if (!Object.keys(erros).length) {
-    gravarPessoa(v, Astro.locals.user, id);
+    await gravarPessoa(v, Astro.locals.user, id);
     return Astro.redirect(`/app/beneficiarios/${id}?ok=actualizado`);
   }
   Astro.response.status = 422;
 } else {
-  auditar(Astro.locals.user, 'Consulta de dados sensíveis (edição)', `pessoa:${id}`, Astro.locals.ip);
+  await auditar(Astro.locals.user, 'Consulta de dados sensíveis (edição)', `pessoa:${id}`, Astro.locals.ip);
 }
 const aviso = actual.estado === 'validado'
   ? 'Este registo está validado. Se a alteração o deixar incompleto, volta ao estado pendente.' : undefined;

@@ -4,9 +4,9 @@ import { db } from '../../lib/db.js';
 
 if (Astro.request.method === 'POST') {
   const fd = await Astro.request.formData();
-  if (fd.get('accao') === 'apagar') db().prepare('DELETE FROM contactos WHERE id = ?').run(Number(fd.get('id')));
+  if (fd.get('accao') === 'apagar') await db.run('DELETE FROM contactos WHERE id = ?', Number(fd.get('id')));
 }
-const lista = db().prepare('SELECT * FROM contactos ORDER BY id DESC LIMIT 200').all();
+const lista = await db.all('SELECT * FROM contactos ORDER BY id DESC LIMIT 200');
 ---
 <App title="Contactos recebidos" ativo="contactos" subtitulo="Mensagens enviadas pelo formulário do site público.">
   {lista.length === 0 ? <p class="vazio">Sem mensagens.</p> : (

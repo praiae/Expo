@@ -1,20 +1,26 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
-import node from '@astrojs/node';
+import netlify from '@astrojs/netlify';
 
-// Domínios aceites no cabeçalho Host (necessário para a verificação de origem dos formulários).
-// Ex.: ALLOWED_DOMAINS="expoconnect.ao,www.expoconnect.ao". O domínio de SITE_URL é incluído automaticamente.
+// Domínios aceites no cabeçalho Host (verificação de origem dos formulários).
+// No Netlify, URL e DEPLOY_PRIME_URL são definidos automaticamente durante o build.
 const dominios = new Set(['localhost', '127.0.0.1', ...(process.env.ALLOWED_DOMAINS || '').split(',').map((d) => d.trim()).filter(Boolean)]);
-if (process.env.SITE_URL) dominios.add(new URL(process.env.SITE_URL).hostname);
+for (const u of [process.env.SITE_URL, process.env.URL, process.env.DEPLOY_PRIME_URL]) if (u) dominios.add(new URL(u).hostname);
 
 export default defineConfig({
   output: 'server',
-  adapter: node({ mode: 'standalone' }),
-  site: process.env.SITE_URL || undefined,
+  adapter: netlify({
+    // PGlite só serve para desenvolvimento local; não entra na função de produção.
+    excludeFiles: ['./node_modules/@electric-sql/pglite/**/*'],
+    // Sem Edge Functions: não emular localmente.
+    devFeatures: { edgeFunctions: false },
+  }),
+  // As sessões são próprias (tabela "sessoes"); as sessões do Astro (Netlify Blobs) não são usadas.
+  session: false,
+  site: process.env.SITE_URL || process.env.URL || undefined,
   security: {
     checkOrigin: true,
     allowedDomains: [...dominios].map((hostname) => ({ hostname })),
   },
-  server: { host: process.env.HOST || 'localhost', port: Number(process.env.PORT) || 4321 },
-  vite: { ssr: { external: ['node:sqlite'] } },
+  vite: { ssr: { external: ['pg', '@electric-sql/pglite'] } },
 });

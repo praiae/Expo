@@ -17,21 +17,19 @@ if (Astro.request.method === 'POST') {
   const fd = await Astro.request.formData();
   if (fd.get('accao') === 'guardar') {
     const titulo = String(fd.get('titulo') || '').trim().slice(0, 120) || 'Relatório estatístico';
-    const e = calcularEstatisticas(f);
-    db().prepare('INSERT INTO relatorios (tipo, filtros, resultados, utilizador_id) VALUES (?, ?, ?, ?)')
-      .run(titulo, JSON.stringify(f), JSON.stringify(e), user.id);
-    auditar(user, 'Relatório guardado', titulo, Astro.locals.ip);
+    const e = await calcularEstatisticas(f);
+    await db.run('INSERT INTO relatorios (tipo, filtros, resultados, utilizador_id) VALUES (?, ?, ?, ?)', titulo, JSON.stringify(f), JSON.stringify(e), user.id);
+    await auditar(user, 'Relatório guardado', titulo, Astro.locals.ip);
     ok = 'Relatório guardado no histórico.';
   } else if (fd.get('accao') === 'apagar') {
-    db().prepare('DELETE FROM relatorios WHERE id = ? AND (utilizador_id = ? OR ? = 1)')
-      .run(Number(fd.get('id')), user.id, pode(user, 'administracao') ? 1 : 0);
+    await db.run('DELETE FROM relatorios WHERE id = ? AND (utilizador_id = ? OR ? = 1)', Number(fd.get('id')), user.id, pode(user, 'administracao') ? 1 : 0);
   }
 }
 
-const e = calcularEstatisticas(f);
+const e = await calcularEstatisticas(f);
 const t = e.totais;
-const guardados = db().prepare(`SELECT r.id, r.data, r.tipo, r.filtros, json_extract(r.resultados, '$.totais.total') total, u.nome autor
-  FROM relatorios r LEFT JOIN utilizadores u ON u.id = r.utilizador_id ORDER BY r.id DESC LIMIT 20`).all();
+const guardados = await db.all(`SELECT r.id, r.data, r.tipo, r.filtros, (r.resultados::jsonb #>> '{totais,total}')::int total, u.nome autor
+  FROM relatorios r LEFT JOIN utilizadores u ON u.id = r.utilizador_id ORDER BY r.id DESC LIMIT 20`);
 const filtrosActivos = Object.entries(f).filter(([k]) => CAMPOS.includes(k));
 const kz = (n: number) => `${fmt(n)} Kz`;
 ---

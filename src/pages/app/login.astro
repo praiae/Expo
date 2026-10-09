@@ -13,7 +13,7 @@ if (Astro.locals.user) return Astro.redirect(destino(Astro.url.searchParams.get(
 if (Astro.request.method === 'POST') {
   const fd = await Astro.request.formData();
   email = String(fd.get('email') || '');
-  const s = iniciarSessao(email, String(fd.get('password') || ''), Astro.locals.ip);
+  const s = await iniciarSessao(email, String(fd.get('password') || ''), Astro.locals.ip);
   if (s) {
     Astro.cookies.set(COOKIE_SESSAO, s.token, opcoesCookie(s.expira));
     return Astro.redirect(destino(String(fd.get('r') || '')));

@@ -23,11 +23,11 @@ export function construirWhere(f, opt = {}) {
   if (opt.apenasValidados) w.push("estado = 'validado'");
   if (f.q) {
     const h = hashBI(f.q);
-    w.push('(nome LIKE ? COLLATE NOCASE OR bi_hash = ?)');
+    w.push('(nome ILIKE ? OR bi_hash = ?)');
     a.push(`%${f.q}%`, h);
   }
   if (f.provincia) { w.push('provincia = ?'); a.push(f.provincia); }
-  if (f.municipio) { w.push('municipio LIKE ? COLLATE NOCASE'); a.push(`%${f.municipio}%`); }
+  if (f.municipio) { w.push('municipio ILIKE ?'); a.push(`%${f.municipio}%`); }
   if (f.sexo) { w.push('sexo = ?'); a.push(f.sexo); }
   if (f.faixa) {
     const fx = FAIXAS_ETARIAS.find((x) => x.id === f.faixa);
@@ -36,7 +36,7 @@ export function construirWhere(f, opt = {}) {
   if (f.categoria) { w.push('categoria = ?'); a.push(f.categoria); }
   if (f.condicao && CONDICOES[f.condicao]) w.push(`${f.condicao} = 1`);
   if (f.produto && PRODUTOS[f.produto]) w.push(`${f.produto} = 1`);
-  if (f.prioridade) { w.push('prioridade = ?'); a.push(Number(f.prioridade)); }
+  if ([1, 2, 3].includes(Number(f.prioridade))) { w.push('prioridade = ?'); a.push(Number(f.prioridade)); }
   if (f.estado && !opt.apenasValidados) { w.push('estado = ?'); a.push(f.estado); }
   if (f.situacao) { w.push('situacao_profissional = ?'); a.push(f.situacao); }
   if (f.completo === '0' || f.completo === '1') { w.push('completo = ?'); a.push(Number(f.completo)); }

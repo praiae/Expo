@@ -49,8 +49,8 @@ export function categoriaEstatistica(p) {
   return 'Cliente individual';
 }
 
-/** Pontuação de prioridade segundo os pesos configurados. Devolve { pontos, nivel, motivos }. */
-export function calcularPrioridade(p, params = parametrosPrioridade()) {
+/** Pontuação de prioridade segundo os pesos configurados (params obrigatório). Devolve { pontos, nivel, motivos }. */
+export function calcularPrioridade(p, params) {
   const w = params.pesos;
   const motivos = [];
   let pontos = 0;
@@ -90,7 +90,9 @@ export function validarFormulario(p) {
   if (!p.nome || p.nome.length < 3) erros.nome = 'Indique o nome completo.';
   if (p.data_nascimento) {
     const idade = calcularIdade(p.data_nascimento);
-    if (idade == null || idade < 0 || idade > 120) erros.data_nascimento = 'Data de nascimento inválida.';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.data_nascimento) || idade == null || idade < 0 || idade > 120) {
+      erros.data_nascimento = 'Data de nascimento inválida.';
+    }
   }
   if (p.bi && !/^[0-9A-Za-z]{6,20}$/.test(p.bi.replace(/\s/g, ''))) erros.bi = 'Número do BI inválido.';
   if (p.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) erros.email = 'E-mail inválido.';
@@ -99,17 +101,13 @@ export function validarFormulario(p) {
   return erros;
 }
 
-export function biDuplicado(bi, excluirId = null) {
+export async function biDuplicado(bi, excluirId = null) {
   const h = hashBI(bi);
   if (!h) return null;
-  const row = db().prepare('SELECT id, nome FROM pessoas WHERE bi_hash = ? AND id IS NOT ?').get(h, excluirId);
-  return row || null;
+  return (await db.get('SELECT id, nome FROM pessoas WHERE bi_hash = ? AND id IS DISTINCT FROM ?::int', h, excluirId)) || null;
 }
 
-/** Obtém um beneficiário com campos desencriptados (para quem tem permissão). */
-export function obterPessoa(id) {
-  const p = db().prepare('SELECT * FROM v_pessoas WHERE id = ?').get(id);
-  if (!p) return null;
+function comSensiveis(p) {
   return {
     ...p,
     bi: desencriptar(p.bi_enc),
@@ -117,6 +115,12 @@ export function obterPessoa(id) {
     email: desencriptar(p.email_enc),
     morada: desencriptar(p.morada_enc),
   };
+}
+
+/** Obtém um beneficiário com campos desencriptados (para quem tem permissão). */
+export async function obterPessoa(id, q = db) {
+  const p = await q.get('SELECT * FROM v_pessoas WHERE id = ?', id);
+  return p ? comSensiveis(p) : null;
 }
 
 const CAMPOS_HISTORICO = ['nome', 'sexo', 'data_nascimento', 'bi', 'telefone', 'email', 'provincia', 'municipio', 'bairro',
@@ -134,69 +138,73 @@ function diferencas(antes, depois) {
   return d;
 }
 
+const lista = (n, inicio = 1) => Array.from({ length: n }, (_, i) => `$${i + inicio}`).join(', ');
+const actualizar = (cols) => cols.map((c) => `${c} = EXCLUDED.${c}`).join(', ');
+
 /** Cria ou actualiza um beneficiário. Devolve o id. */
-export function gravarPessoa(p, user, id = null) {
-  const prio = calcularPrioridade(p);
+export async function gravarPessoa(p, user, id = null) {
+  const prio = calcularPrioridade(p, await parametrosPrioridade());
   const falta = camposEmFalta(p);
   const categoria = categoriaEstatistica(p);
-  const antes = id ? obterPessoa(id) : null;
+  const completo = falta.length ? 0 : 1;
 
-  return transacao((d) => {
+  return transacao(async (tx) => {
+    const antes = id ? await obterPessoa(id, tx) : null;
     const base = [p.nome, p.sexo || null, p.data_nascimento || null, hashBI(p.bi), encriptar(p.bi), encriptar(p.telefone),
       encriptar(p.email), encriptar(p.morada), p.provincia || null, p.municipio || null, p.bairro || null, p.consentimento,
-      falta.length ? 0 : 1, falta.join(', ') || null, categoria, prio.nivel, prio.pontos];
+      completo, falta.join(', ') || null, categoria, prio.nivel, prio.pontos];
     let pid = id;
     if (id) {
       // Uma alteração devolve o registo ao estado pendente se ficar incompleto.
-      d.prepare(`UPDATE pessoas SET nome=?, sexo=?, data_nascimento=?, bi_hash=?, bi_enc=?, telefone_enc=?, email_enc=?,
+      await tx.run(`UPDATE pessoas SET nome=?, sexo=?, data_nascimento=?::date, bi_hash=?, bi_enc=?, telefone_enc=?, email_enc=?,
         morada_enc=?, provincia=?, municipio=?, bairro=?, consentimento=?, completo=?, campos_em_falta=?, categoria=?,
-        prioridade=?, prioridade_pontos=?, atualizado_em=datetime('now'),
-        consentimento_em = CASE WHEN ? = 1 AND consentimento_em IS NULL THEN datetime('now') ELSE consentimento_em END,
-        estado = CASE WHEN ? = 1 THEN estado ELSE 'pendente' END
-        WHERE id=?`).run(...base, p.consentimento, falta.length ? 0 : 1, id);
+        prioridade=?, prioridade_pontos=?, atualizado_em=agora(),
+        consentimento_em = CASE WHEN ?::int = 1 AND consentimento_em IS NULL THEN agora() ELSE consentimento_em END,
+        estado = CASE WHEN ?::int = 1 THEN estado ELSE 'pendente' END
+        WHERE id=?`, ...base, p.consentimento, completo, id);
     } else {
-      pid = Number(d.prepare(`INSERT INTO pessoas (nome, sexo, data_nascimento, bi_hash, bi_enc, telefone_enc, email_enc,
+      const r = await tx.get(`INSERT INTO pessoas (nome, sexo, data_nascimento, bi_hash, bi_enc, telefone_enc, email_enc,
         morada_enc, provincia, municipio, bairro, consentimento, completo, campos_em_falta, categoria, prioridade,
-        prioridade_pontos, consentimento_em, criado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-        .run(...base, p.consentimento ? new Date().toISOString() : null, user?.id ?? null).lastInsertRowid);
+        prioridade_pontos, consentimento_em, criado_por)
+        VALUES (?,?,?::date,?,?,?,?,?,?,?,?,?,?,?,?,?,?, CASE WHEN ?::int = 1 THEN agora() END, ?) RETURNING id`,
+      ...base, p.consentimento, user?.id ?? null);
+      pid = r.id;
     }
     const cc = [...BOOL_CONDICOES, ...TXT_CONDICOES];
-    d.prepare(`INSERT OR REPLACE INTO condicoes (pessoa_id, ${cc.join(',')}) VALUES (?${',?'.repeat(cc.length)})`)
-      .run(pid, ...cc.map((k) => p[k] ?? null));
-    d.prepare(`INSERT OR REPLACE INTO socioeconomica (pessoa_id, nivel_academico, sabe_ler, situacao_profissional,
-      margem_salarial, fonte_rendimento, dependentes) VALUES (?,?,?,?,?,?,?)`)
-      .run(pid, p.nivel_academico || null, p.sabe_ler, p.situacao_profissional || null, p.margem_salarial || null,
-        p.fonte_rendimento || null, p.dependentes);
+    await tx.run(`INSERT INTO condicoes (pessoa_id, ${cc.join(',')}) VALUES (${lista(cc.length + 1)})
+      ON CONFLICT (pessoa_id) DO UPDATE SET ${actualizar(cc)}`, pid, ...cc.map((k) => p[k] ?? null));
+    const sc = ['nivel_academico', 'sabe_ler', 'situacao_profissional', 'margem_salarial', 'fonte_rendimento', 'dependentes'];
+    await tx.run(`INSERT INTO socioeconomica (pessoa_id, ${sc.join(',')}) VALUES (${lista(sc.length + 1)})
+      ON CONFLICT (pessoa_id) DO UPDATE SET ${actualizar(sc)}`, pid, ...sc.map((k) => (p[k] === '' ? null : p[k] ?? null)));
     const pc = [...BOOL_PROCURA, 'servico_pretendido'];
-    d.prepare(`INSERT OR REPLACE INTO procura (pessoa_id, ${pc.join(',')}) VALUES (?${',?'.repeat(pc.length)})`)
-      .run(pid, ...pc.map((k) => p[k] ?? null));
-    d.prepare('INSERT INTO historico (pessoa_id, utilizador_id, acao, alteracoes) VALUES (?, ?, ?, ?)')
-      .run(pid, user?.id ?? null, id ? 'Actualização' : 'Registo', JSON.stringify(diferencas(antes, p)));
+    await tx.run(`INSERT INTO procura (pessoa_id, ${pc.join(',')}) VALUES (${lista(pc.length + 1)})
+      ON CONFLICT (pessoa_id) DO UPDATE SET ${actualizar(pc)}`, pid, ...pc.map((k) => p[k] ?? null));
+    await tx.run('INSERT INTO historico (pessoa_id, utilizador_id, acao, alteracoes) VALUES (?, ?, ?, ?)',
+      pid, user?.id ?? null, id ? 'Actualização' : 'Registo', JSON.stringify(diferencas(antes, p)));
     return pid;
   });
 }
 
-export function validarRegisto(id, user) {
-  const p = db().prepare('SELECT completo, estado FROM pessoas WHERE id = ?').get(id);
+export async function validarRegisto(id, user) {
+  const p = await db.get('SELECT completo, estado FROM pessoas WHERE id = ?', id);
   if (!p) return 'Registo não encontrado.';
   if (!p.completo) return 'Só registos completos podem ser validados.';
   if (p.estado === 'validado') return null;
-  db().prepare("UPDATE pessoas SET estado='validado', validado_por=?, validado_em=datetime('now') WHERE id=?").run(user.id, id);
-  db().prepare('INSERT INTO historico (pessoa_id, utilizador_id, acao) VALUES (?, ?, ?)').run(id, user.id, 'Validação');
+  await transacao(async (tx) => {
+    await tx.run("UPDATE pessoas SET estado='validado', validado_por=?, validado_em=agora() WHERE id=?", user.id, id);
+    await tx.run('INSERT INTO historico (pessoa_id, utilizador_id, acao) VALUES (?, ?, ?)', id, user.id, 'Validação');
+  });
   return null;
 }
 
 /** Recalcula prioridade e categoria de todos os registos (após mudança de parâmetros). */
-export function recalcularTodos() {
-  const params = parametrosPrioridade();
-  const ids = db().prepare('SELECT id FROM pessoas').all();
-  const upd = db().prepare('UPDATE pessoas SET prioridade=?, prioridade_pontos=?, categoria=? WHERE id=?');
-  transacao(() => {
-    for (const { id } of ids) {
-      const p = db().prepare('SELECT * FROM v_pessoas WHERE id = ?').get(id);
-      const r = calcularPrioridade(p, params);
-      upd.run(r.nivel, r.pontos, categoriaEstatistica(p), id);
-    }
-  });
-  return ids.length;
+export async function recalcularTodos() {
+  const params = await parametrosPrioridade();
+  const todos = await db.all('SELECT * FROM v_pessoas');
+  if (!todos.length) return 0;
+  // Uma única actualização em lote, em vez de uma consulta por registo.
+  const dados = todos.map((p) => { const r = calcularPrioridade(p, params); return { id: p.id, n: r.nivel, pt: r.pontos, c: categoriaEstatistica(p) }; });
+  await db.run(`UPDATE pessoas p SET prioridade = d.n, prioridade_pontos = d.pt, categoria = d.c
+    FROM json_to_recordset(?::json) AS d(id int, n int, pt int, c text) WHERE p.id = d.id`, JSON.stringify(dados));
+  return todos.length;
 }

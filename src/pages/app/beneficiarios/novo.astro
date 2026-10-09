@@ -8,10 +8,10 @@ let erros: Record<string, string> = {};
 if (Astro.request.method === 'POST') {
   v = lerFormulario(await Astro.request.formData());
   erros = validarFormulario(v);
-  const dup = !erros.bi && biDuplicado(v.bi);
+  const dup = !erros.bi && await biDuplicado(v.bi);
   if (dup) erros.bi = `Já existe um registo com este BI (n.º ${dup.id}).`;
   if (!Object.keys(erros).length) {
-    const id = gravarPessoa(v, Astro.locals.user);
+    const id = await gravarPessoa(v, Astro.locals.user);
     return Astro.redirect(`/app/beneficiarios/${id}?ok=criado`);
   }
   Astro.response.status = 422;

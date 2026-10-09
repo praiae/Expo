@@ -20,7 +20,9 @@ const ROTAS = [
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
   const { pathname } = ctx.url;
-  ctx.locals.user = utilizadorDaSessao(ctx.cookies.get(COOKIE_SESSAO)?.value);
+  // Só consulta a base de dados quando existe cookie de sessão.
+  const cookie = ctx.cookies.get(COOKIE_SESSAO)?.value;
+  ctx.locals.user = cookie ? await utilizadorDaSessao(cookie) : null;
   // clientAddress só usa X-Forwarded-For quando o Host foi validado (security.allowedDomains).
   try { ctx.locals.ip = ctx.clientAddress || null; } catch { ctx.locals.ip = null; }
 

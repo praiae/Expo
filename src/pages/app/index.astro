@@ -7,9 +7,9 @@ import { calcularEstatisticas, contagemPendentes, fmt, pct } from '../../lib/est
 import { pode } from '../../lib/constantes.js';
 
 const user = Astro.locals.user;
-const e = calcularEstatisticas();
+const e = await calcularEstatisticas();
 const t = e.totais;
-const pend = contagemPendentes();
+const pend = await contagemPendentes();
 const verRegistos = pode(user, 'beneficiarios.ver');
 const ligProv = verRegistos ? (p: string) => `/app/beneficiarios?provincia=${encodeURIComponent(p)}` : undefined;
 ---

@@ -11,10 +11,10 @@ const POR_PAGINA = 25;
 const f = lerFiltros(Astro.url);
 const pagina = Math.max(1, parseInt(Astro.url.searchParams.get('p') || '1', 10) || 1);
 const { sql, args } = construirWhere(f);
-const total = db().prepare(`SELECT COUNT(*) n FROM v_pessoas ${sql}`).get(...args).n;
+const { n: total } = await db.get(`SELECT COUNT(*) n FROM v_pessoas ${sql}`, ...args);
 const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
-const linhas = db().prepare(`SELECT id, nome, sexo, idade, provincia, municipio, categoria, prioridade, estado, completo, campos_em_falta, atualizado_em
-  FROM v_pessoas ${sql} ORDER BY atualizado_em DESC, id DESC LIMIT ? OFFSET ?`).all(...args, POR_PAGINA, (pagina - 1) * POR_PAGINA);
+const linhas = await db.all(`SELECT id, nome, sexo, idade, provincia, municipio, categoria, prioridade, estado, completo, campos_em_falta, atualizado_em
+  FROM v_pessoas ${sql} ORDER BY atualizado_em DESC, id DESC LIMIT ? OFFSET ?`, ...args, POR_PAGINA, (pagina - 1) * POR_PAGINA);
 const msg = Astro.url.searchParams.get('ok');
 ---
 <App title="Beneficiários" ativo="beneficiarios" subtitulo={`${fmt(total)} registo(s) encontrados`}>

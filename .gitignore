@@ -4,3 +4,4 @@ dist/
 # Base de dados e chave de encriptação — nunca versionar.
 data/
 .env
+.netlify/

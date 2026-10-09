@@ -16,19 +16,19 @@ if (Astro.request.method === 'POST') {
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email)) erro = 'Indique um e-mail válido.';
   else if (v.mensagem.length < 10) erro = 'Escreva uma mensagem um pouco mais longa.';
   else {
-    const recentes = db().prepare("SELECT COUNT(*) n FROM contactos WHERE criado_em > datetime('now', '-1 hour')").get().n;
+    const { n: recentes } = await db.get("SELECT COUNT(*) n FROM contactos WHERE criado_em > agora('-1 hour')");
     if (recentes > 50) erro = 'Recebemos demasiadas mensagens. Tente mais tarde.';
     else {
-      db().prepare('INSERT INTO contactos (nome, email, organizacao, mensagem) VALUES (?, ?, ?, ?)').run(v.nome, v.email, v.organizacao, v.mensagem);
+      await db.run('INSERT INTO contactos (nome, email, organizacao, mensagem) VALUES (?, ?, ?, ?)', v.nome, v.email, v.organizacao, v.mensagem);
       enviado = true;
     }
   }
 }
 
 // Números públicos: apenas agregados de registos validados.
-const n = db().prepare(`SELECT COUNT(*) total, COUNT(DISTINCT provincia) provincias,
-  SUM(cadeira_manual + cadeira_eletrica + oculos_inteligentes + adaptacao_automovel + manutencao > 0) procura
-  FROM v_pessoas WHERE estado = 'validado'`).get();
+const n = await db.get(`SELECT COUNT(*) total, COUNT(DISTINCT provincia) provincias,
+  COUNT(*) FILTER (WHERE cadeira_manual + cadeira_eletrica + oculos_inteligentes + adaptacao_automovel + manutencao > 0) procura
+  FROM v_pessoas WHERE estado = 'validado'`);
 ---
 <Base title="Expo Connect Angola — Acessibilidade e inclusão com dados">
   <SiteHeader />

@@ -1,28 +1,38 @@
-// Base de dados SQLite (módulo nativo do Node) + encriptação de campos sensíveis.
-import { DatabaseSync } from 'node:sqlite';
+// Base de dados Postgres (Netlify Database em produção, PGlite local) + encriptação de campos sensíveis.
 import { randomBytes, createCipheriv, createDecipheriv, createHmac, scryptSync, timingSafeEqual } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { ESQUEMA } from './esquema.js';
 
+// PRODUCAO: código compilado pelo Astro (build). Scripts Node (seed) e "astro dev" não são produção.
+const PRODUCAO = !!import.meta.env?.PROD;
+const URL_EXPLICITO = process.env.DATABASE_URL || '';
 const DATA_DIR = resolve(process.env.DATA_DIR || join(process.cwd(), 'data'));
-mkdirSync(DATA_DIR, { recursive: true });
-export const DB_PATH = join(DATA_DIR, 'expo-connect.db');
 
-// Chave mestra: variável APP_SECRET ou ficheiro gerado no primeiro arranque.
+// Chave mestra: APP_SECRET (obrigatória em produção) ou ficheiro local gerado no primeiro arranque.
 function carregarSegredo() {
   if (process.env.APP_SECRET) return process.env.APP_SECRET;
+  if (PRODUCAO || URL_EXPLICITO) {
+    throw new Error('APP_SECRET não definida. Configure-a nas variáveis de ambiente (ex.: openssl rand -hex 32).');
+  }
+  mkdirSync(DATA_DIR, { recursive: true });
   const f = join(DATA_DIR, 'secret.key');
   if (!existsSync(f)) writeFileSync(f, randomBytes(32).toString('hex'), { mode: 0o600 });
   return readFileSync(f, 'utf8').trim();
 }
-const SEGREDO = carregarSegredo();
-const CHAVE_AES = scryptSync(SEGREDO, 'expo-connect:aes', 32);
-const CHAVE_HMAC = scryptSync(SEGREDO, 'expo-connect:hmac', 32);
+let _chaves;
+function chaves() {
+  if (!_chaves) {
+    const s = carregarSegredo();
+    _chaves = { aes: scryptSync(s, 'expo-connect:aes', 32), hmac: scryptSync(s, 'expo-connect:hmac', 32) };
+  }
+  return _chaves;
+}
 
 export function encriptar(texto) {
   if (texto == null || texto === '') return null;
   const iv = randomBytes(12);
-  const c = createCipheriv('aes-256-gcm', CHAVE_AES, iv);
+  const c = createCipheriv('aes-256-gcm', chaves().aes, iv);
   const dados = Buffer.concat([c.update(String(texto), 'utf8'), c.final()]);
   return Buffer.concat([iv, c.getAuthTag(), dados]).toString('base64');
 }
@@ -31,7 +41,7 @@ export function desencriptar(b64) {
   if (!b64) return '';
   try {
     const buf = Buffer.from(b64, 'base64');
-    const d = createDecipheriv('aes-256-gcm', CHAVE_AES, buf.subarray(0, 12));
+    const d = createDecipheriv('aes-256-gcm', chaves().aes, buf.subarray(0, 12));
     d.setAuthTag(buf.subarray(12, 28));
     return Buffer.concat([d.update(buf.subarray(28)), d.final()]).toString('utf8');
   } catch {
@@ -42,7 +52,7 @@ export function desencriptar(b64) {
 // Hash determinístico do BI: permite garantir unicidade e pesquisar sem guardar o BI em claro.
 export function hashBI(bi) {
   const n = String(bi || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return n ? createHmac('sha256', CHAVE_HMAC).update(n).digest('hex') : null;
+  return n ? createHmac('sha256', chaves().hmac).update(n).digest('hex') : null;
 }
 
 export function hashPassword(pw) {
@@ -56,139 +66,6 @@ export function verificarPassword(pw, guardado) {
   return timingSafeEqual(calc, Buffer.from(hash, 'hex'));
 }
 
-const SCHEMA = `
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-
-CREATE TABLE IF NOT EXISTS utilizadores (
-  id INTEGER PRIMARY KEY,
-  nome TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('admin','tecnico','analista','gestor','externo')),
-  ativo INTEGER NOT NULL DEFAULT 1,
-  pessoa_id INTEGER REFERENCES pessoas(id) ON DELETE SET NULL,
-  criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS sessoes (
-  token TEXT PRIMARY KEY,
-  utilizador_id INTEGER NOT NULL REFERENCES utilizadores(id) ON DELETE CASCADE,
-  expira_em TEXT NOT NULL
-);
-
--- Tabela Pessoas (identificação). Campos de contacto e BI encriptados.
-CREATE TABLE IF NOT EXISTS pessoas (
-  id INTEGER PRIMARY KEY,
-  nome TEXT NOT NULL,
-  sexo TEXT,
-  data_nascimento TEXT,
-  bi_hash TEXT UNIQUE,
-  bi_enc TEXT,
-  telefone_enc TEXT,
-  email_enc TEXT,
-  morada_enc TEXT,
-  provincia TEXT,
-  municipio TEXT,
-  bairro TEXT,
-  consentimento INTEGER NOT NULL DEFAULT 0,
-  consentimento_em TEXT,
-  estado TEXT NOT NULL DEFAULT 'pendente' CHECK (estado IN ('pendente','validado')),
-  completo INTEGER NOT NULL DEFAULT 0,
-  campos_em_falta TEXT,
-  categoria TEXT,
-  prioridade INTEGER,
-  prioridade_pontos INTEGER,
-  criado_por INTEGER REFERENCES utilizadores(id),
-  validado_por INTEGER REFERENCES utilizadores(id),
-  validado_em TEXT,
-  criado_em TEXT NOT NULL DEFAULT (datetime('now')),
-  atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS ix_pessoas_prov ON pessoas(provincia, municipio);
-CREATE INDEX IF NOT EXISTS ix_pessoas_nome ON pessoas(nome COLLATE NOCASE);
-
--- Tabela Condições (condição pessoal, causa e funcionalidade)
-CREATE TABLE IF NOT EXISTS condicoes (
-  pessoa_id INTEGER PRIMARY KEY REFERENCES pessoas(id) ON DELETE CASCADE,
-  pcd INTEGER DEFAULT 0, cego INTEGER DEFAULT 0, baixa_visao INTEGER DEFAULT 0, idoso INTEGER DEFAULT 0,
-  cadeira_rodas INTEGER DEFAULT 0, muletas INTEGER DEFAULT 0, apoio_permanente INTEGER DEFAULT 0,
-  apoio_parcial INTEGER DEFAULT 0, mobilidade_reduzida INTEGER DEFAULT 0,
-  tipo_deficiencia TEXT, origem TEXT, causa TEXT, causa_outra TEXT, grau TEXT,
-  desloca_sozinho INTEGER DEFAULT 0, ajuda_sair_casa INTEGER DEFAULT 0, apoio_transferencias INTEGER DEFAULT 0,
-  sobe_escadas INTEGER DEFAULT 0, transporte_publico INTEGER DEFAULT 0, lim_membros_sup INTEGER DEFAULT 0,
-  lim_visual INTEGER DEFAULT 0, lim_comunicacao INTEGER DEFAULT 0, tecnologia_assistiva INTEGER DEFAULT 0
-);
-
--- Tabela Socioeconómica
-CREATE TABLE IF NOT EXISTS socioeconomica (
-  pessoa_id INTEGER PRIMARY KEY REFERENCES pessoas(id) ON DELETE CASCADE,
-  nivel_academico TEXT, sabe_ler INTEGER, situacao_profissional TEXT,
-  margem_salarial TEXT, fonte_rendimento TEXT, dependentes INTEGER
-);
-
--- Tabela Procura
-CREATE TABLE IF NOT EXISTS procura (
-  pessoa_id INTEGER PRIMARY KEY REFERENCES pessoas(id) ON DELETE CASCADE,
-  cadeira_manual INTEGER DEFAULT 0, cadeira_eletrica INTEGER DEFAULT 0, oculos_inteligentes INTEGER DEFAULT 0,
-  adaptacao_automovel INTEGER DEFAULT 0, manutencao INTEGER DEFAULT 0,
-  aquisicao_futura INTEGER DEFAULT 0, compra_imediata INTEGER DEFAULT 0, apoio_social INTEGER DEFAULT 0,
-  servico_pretendido TEXT
-);
-
--- Histórico de alterações por registo
-CREATE TABLE IF NOT EXISTS historico (
-  id INTEGER PRIMARY KEY,
-  pessoa_id INTEGER NOT NULL REFERENCES pessoas(id) ON DELETE CASCADE,
-  utilizador_id INTEGER REFERENCES utilizadores(id),
-  acao TEXT NOT NULL,
-  alteracoes TEXT,
-  criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- Auditoria de acessos
-CREATE TABLE IF NOT EXISTS auditoria (
-  id INTEGER PRIMARY KEY,
-  utilizador_id INTEGER REFERENCES utilizadores(id),
-  acao TEXT NOT NULL,
-  alvo TEXT,
-  ip TEXT,
-  criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- Tabela Relatórios
-CREATE TABLE IF NOT EXISTS relatorios (
-  id INTEGER PRIMARY KEY,
-  data TEXT NOT NULL DEFAULT (datetime('now')),
-  tipo TEXT NOT NULL,
-  filtros TEXT,
-  resultados TEXT,
-  utilizador_id INTEGER REFERENCES utilizadores(id)
-);
-
-CREATE TABLE IF NOT EXISTS parametros (chave TEXT PRIMARY KEY, valor TEXT NOT NULL);
-
-CREATE TABLE IF NOT EXISTS contactos (
-  id INTEGER PRIMARY KEY, nome TEXT, email TEXT NOT NULL, organizacao TEXT, mensagem TEXT,
-  criado_em TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
--- Vista consolidada usada por filtros, estatísticas e relatórios.
-CREATE VIEW IF NOT EXISTS v_pessoas AS
-SELECT p.*,
-  CAST((julianday('now') - julianday(p.data_nascimento)) / 365.25 AS INTEGER) AS idade,
-  c.pcd, c.cego, c.baixa_visao, c.idoso, c.cadeira_rodas, c.muletas, c.apoio_permanente, c.apoio_parcial,
-  c.mobilidade_reduzida, c.tipo_deficiencia, c.origem, c.causa, c.causa_outra, c.grau,
-  c.desloca_sozinho, c.ajuda_sair_casa, c.apoio_transferencias, c.sobe_escadas, c.transporte_publico,
-  c.lim_membros_sup, c.lim_visual, c.lim_comunicacao, c.tecnologia_assistiva,
-  s.nivel_academico, s.sabe_ler, s.situacao_profissional, s.margem_salarial, s.fonte_rendimento, s.dependentes,
-  r.cadeira_manual, r.cadeira_eletrica, r.oculos_inteligentes, r.adaptacao_automovel, r.manutencao,
-  r.aquisicao_futura, r.compra_imediata, r.apoio_social, r.servico_pretendido
-FROM pessoas p
-LEFT JOIN condicoes c ON c.pessoa_id = p.id
-LEFT JOIN socioeconomica s ON s.pessoa_id = p.id
-LEFT JOIN procura r ON r.pessoa_id = p.id;
-`;
 
 // Pesos e limiares da classificação automática de prioridade (editáveis pelo administrador).
 export const PARAMETROS_PADRAO = {
@@ -201,46 +78,142 @@ export const PARAMETROS_PADRAO = {
   limiar_p2: 5,
 };
 
-let _db;
-export function db() {
-  if (_db) return _db;
-  _db = new DatabaseSync(DB_PATH);
-  _db.exec(SCHEMA);
-  const temParams = _db.prepare('SELECT 1 FROM parametros WHERE chave = ?').get('prioridade');
-  if (!temParams) {
-    _db.prepare('INSERT INTO parametros (chave, valor) VALUES (?, ?)').run('prioridade', JSON.stringify(PARAMETROS_PADRAO));
-  }
-  const nUsers = _db.prepare('SELECT COUNT(*) n FROM utilizadores').get().n;
-  if (nUsers === 0) {
-    const email = process.env.ADMIN_EMAIL || 'admin@expoconnect.ao';
-    const pw = process.env.ADMIN_PASSWORD || 'ExpoConnect2026!';
-    _db.prepare('INSERT INTO utilizadores (nome, email, password_hash, role) VALUES (?, ?, ?, ?)')
-      .run('Administrador', email, hashPassword(pw), 'admin');
-    console.log(`[expo-connect] Administrador criado: ${email} / ${pw}  (altere a palavra-passe após o 1.º acesso)`);
-  }
-  return _db;
+// Converte marcadores "?" e "?N" (estilo SQLite) em "$N" (Postgres).
+function pgSql(sql) {
+  let i = 0;
+  return sql.replace(/\?(\d+)?/g, (_, n) => `$${n ?? ++i}`);
 }
 
-export function parametrosPrioridade() {
-  const row = db().prepare('SELECT valor FROM parametros WHERE chave = ?').get('prioridade');
+/**
+ * Motor: pg (Pool) com DATABASE_URL ou, em produção, a Netlify Database; senão PGlite (Postgres embutido) em data/pglite.
+ * Ambos expõem query(texto, params) -> { rows, rowCount|affectedRows }.
+ */
+async function criarMotor() {
+  let url = URL_EXPLICITO;
+  if (!url && PRODUCAO) {
+    const { getConnectionString } = await import('@netlify/database');
+    url = getConnectionString(); // lança erro claro se a Netlify Database não estiver activa
+  }
+  if (url) {
+    const { default: pg } = await import('pg');
+    // COUNT/SUM devolvem bigint/numeric: converter para Number (os valores cabem com folga).
+    pg.types.setTypeParser(20, (v) => (v === null ? null : Number(v)));
+    pg.types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));
+    pg.types.setTypeParser(1082, (v) => v); // DATE como texto AAAA-MM-DD
+    const pool = new pg.Pool({ connectionString: url, max: 3, idleTimeoutMillis: 10_000 });
+    return {
+      query: (t, p) => pool.query(t, p),
+      fechar: () => pool.end(),
+      async transacao(fn) {
+        const c = await pool.connect();
+        try {
+          await c.query('BEGIN');
+          const r = await fn({ query: (t, p) => c.query(t, p) });
+          await c.query('COMMIT');
+          return r;
+        } catch (e) {
+          await c.query('ROLLBACK').catch(() => {});
+          throw e;
+        } finally {
+          c.release();
+        }
+      },
+    };
+  }
+  // Nome do módulo numa variável para o bundler não o incluir no build de produção.
+  const mod = '@electric-sql/pglite';
+  const { PGlite, types } = await import(/* @vite-ignore */ mod);
+  mkdirSync(DATA_DIR, { recursive: true });
+  const num = (v) => (v === null ? null : Number(v));
+  const lite = await PGlite.create(join(DATA_DIR, 'pglite'), {
+    parsers: { [types.INT8]: num, [types.NUMERIC]: num, [types.DATE]: (v) => v },
+  });
+  const norm = (r) => ({ rows: r.rows, rowCount: r.affectedRows ?? r.rows.length });
+  return {
+    query: async (t, p) => norm(await lite.query(t, p)),
+    fechar: () => lite.close(),
+    transacao: (fn) => lite.transaction((tx) => fn({ query: async (t, p) => norm(await tx.query(t, p)) })),
+  };
+}
+
+let _pronto;
+function motor() {
+  if (!_pronto) {
+    _pronto = (async () => {
+      const m = await criarMotor();
+      // Bloqueio para evitar corridas entre instâncias que arrancam ao mesmo tempo.
+      await m.transacao(async (tx) => {
+        await tx.query('SELECT pg_advisory_xact_lock(724001)');
+        // Na Netlify Database o esquema é aplicado pelas migrações (netlify/database/migrations) antes de cada deploy.
+        if (!PRODUCAO || URL_EXPLICITO) {
+          for (const instr of ESQUEMA.split(/;\s*\n(?=\s*(?:CREATE|--))/)) if (instr.trim()) await tx.query(instr);
+        }
+        await tx.query('INSERT INTO parametros (chave, valor) VALUES ($1, $2) ON CONFLICT (chave) DO NOTHING',
+          ['prioridade', JSON.stringify(PARAMETROS_PADRAO)]);
+        const { rows } = await tx.query('SELECT COUNT(*) n FROM utilizadores');
+        if (rows[0].n === 0) {
+          const email = process.env.ADMIN_EMAIL || 'admin@expoconnect.ao';
+          const pw = process.env.ADMIN_PASSWORD || (PRODUCAO || URL_EXPLICITO ? '' : 'ExpoConnect2026!');
+          if (!pw) {
+            console.error('[expo-connect] Nenhum administrador criado: defina ADMIN_PASSWORD nas variáveis de ambiente.');
+          } else {
+            await tx.query('INSERT INTO utilizadores (nome, email, password_hash, role) VALUES ($1, $2, $3, $4)',
+              ['Administrador', email, hashPassword(pw), 'admin']);
+            console.log(`[expo-connect] Administrador criado: ${email}${process.env.ADMIN_PASSWORD ? '' : ` / ${pw}`}`);
+          }
+        }
+      });
+      return m;
+    })().catch((e) => { _pronto = null; throw e; });
+  }
+  return _pronto;
+}
+
+function api(q) {
+  return {
+    /** Todas as linhas. */
+    all: async (sql, ...args) => (await q(pgSql(sql), args)).rows,
+    /** Primeira linha (ou undefined). */
+    get: async (sql, ...args) => (await q(pgSql(sql), args)).rows[0],
+    /** Executa e devolve { changes, rows }. */
+    run: async (sql, ...args) => { const r = await q(pgSql(sql), args); return { changes: r.rowCount, rows: r.rows }; },
+  };
+}
+
+/** Acesso à base: await db.all/get/run(sql, ...args). */
+export const db = api(async (t, p) => (await motor()).query(t, p));
+
+/** Executa fn(tx) numa transacção; tx tem a mesma interface que db. */
+export async function transacao(fn) {
+  return (await motor()).transacao((c) => fn(api((t, p) => c.query(t, p))));
+}
+
+export async function parametrosPrioridade() {
+  const row = await db.get('SELECT valor FROM parametros WHERE chave = ?', 'prioridade');
   const v = row ? JSON.parse(row.valor) : {};
   return { ...PARAMETROS_PADRAO, ...v, pesos: { ...PARAMETROS_PADRAO.pesos, ...(v.pesos || {}) } };
 }
 
-export function auditar(user, acao, alvo = null, ip = null) {
-  db().prepare('INSERT INTO auditoria (utilizador_id, acao, alvo, ip) VALUES (?, ?, ?, ?)')
-    .run(user?.id ?? null, acao, alvo, ip);
+export async function auditar(user, acao, alvo = null, ip = null) {
+  await db.run('INSERT INTO auditoria (utilizador_id, acao, alvo, ip) VALUES (?, ?, ?, ?)', user?.id ?? null, acao, alvo, ip);
 }
 
-export function transacao(fn) {
-  const d = db();
-  d.exec('BEGIN');
-  try {
-    const r = fn(d);
-    d.exec('COMMIT');
-    return r;
-  } catch (e) {
-    d.exec('ROLLBACK');
-    throw e;
+/** Exporta todas as tabelas em JSON (cópia de segurança lógica). Campos sensíveis seguem encriptados. */
+export async function exportarTudo() {
+  const tabelas = ['utilizadores', 'pessoas', 'condicoes', 'socioeconomica', 'procura', 'historico', 'auditoria', 'relatorios', 'parametros', 'contactos'];
+  const out = { versao: 1, gerado_em: new Date().toISOString(), tabelas: {} };
+  for (const t of tabelas) {
+    out.tabelas[t] = await db.all(t === 'pessoas'
+      ? "SELECT *, to_char(data_nascimento, 'YYYY-MM-DD') data_nascimento FROM pessoas ORDER BY id"
+      : `SELECT * FROM ${t}${t === 'parametros' ? '' : ' ORDER BY 1'}`);
   }
+  return out;
+}
+
+/** Fecha recursos (usado por scripts). */
+export async function fechar() {
+  if (!_pronto) return;
+  const m = await _pronto;
+  _pronto = null;
+  if (m.fechar) await m.fechar();
 }

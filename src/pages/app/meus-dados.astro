@@ -6,8 +6,8 @@ import { CONDICOES, PRODUTOS, PRIORIDADES } from '../../lib/constantes.js';
 
 // Portal do utilizador externo: consulta apenas o próprio registo.
 const user = Astro.locals.user;
-const p = user.pessoa_id ? obterPessoa(user.pessoa_id) : null;
-if (p) auditar(user, 'Consulta dos próprios dados', `pessoa:${p.id}`, Astro.locals.ip);
+const p = user.pessoa_id ? await obterPessoa(user.pessoa_id) : null;
+if (p) await auditar(user, 'Consulta dos próprios dados', `pessoa:${p.id}`, Astro.locals.ip);
 const sim = (m: Record<string, string>) => Object.entries(m).filter(([k]) => p?.[k]).map(([, r]) => r);
 ---
 <App title="Os meus dados" ativo="meus-dados" subtitulo="Informação que a Expo Connect Angola guarda sobre si.">

@@ -1,12 +1,12 @@
 ---
 import App from '../../../../layouts/App.astro';
-import { db, auditar } from '../../../../lib/db.js';
+import { db, auditar, parametrosPrioridade } from '../../../../lib/db.js';
 import { obterPessoa, validarRegisto, calcularPrioridade } from '../../../../lib/pessoas.js';
 import { pode, PRIORIDADES, CONDICOES, FUNCIONALIDADE, PRODUTOS, INTENCAO, MARGENS_SALARIAIS } from '../../../../lib/constantes.js';
 
 const user = Astro.locals.user;
 const id = Number(Astro.params.id);
-if (!Number.isInteger(id) || !db().prepare('SELECT 1 FROM pessoas WHERE id = ?').get(id)) {
+if (!Number.isInteger(id) || !await db.get('SELECT 1 FROM pessoas WHERE id = ?', id)) {
   return new Response('Registo não encontrado.', { status: 404 });
 }
 
@@ -14,26 +14,25 @@ let erro = '';
 if (Astro.request.method === 'POST') {
   const accao = String((await Astro.request.formData()).get('accao') || '');
   if (accao === 'validar' && pode(user, 'beneficiarios.validar')) {
-    erro = validarRegisto(id, user) || '';
+    erro = await validarRegisto(id, user) || '';
     if (!erro) return Astro.redirect(`/app/beneficiarios/${id}?ok=validado`);
   } else if (accao === 'eliminar' && pode(user, 'administracao')) {
-    db().prepare('DELETE FROM pessoas WHERE id = ?').run(id);
-    db().prepare('UPDATE utilizadores SET pessoa_id = NULL WHERE pessoa_id = ?').run(id);
-    auditar(user, 'Eliminação de registo', `pessoa:${id}`, Astro.locals.ip);
+    await db.run('DELETE FROM pessoas WHERE id = ?', id);
+    await db.run('UPDATE utilizadores SET pessoa_id = NULL WHERE pessoa_id = ?', id);
+    await auditar(user, 'Eliminação de registo', `pessoa:${id}`, Astro.locals.ip);
     return Astro.redirect('/app/beneficiarios?ok=eliminado');
   } else {
     return new Response('Acção não autorizada.', { status: 403 });
   }
 }
 
-const p = obterPessoa(id);
+const p = await obterPessoa(id);
 const sensivel = pode(user, 'dados.sensiveis');
-if (sensivel) auditar(user, 'Consulta de dados sensíveis', `pessoa:${id}`, Astro.locals.ip);
-const prio = calcularPrioridade(p);
-const historico = db().prepare(`SELECT h.*, u.nome autor FROM historico h LEFT JOIN utilizadores u ON u.id = h.utilizador_id
-  WHERE h.pessoa_id = ? ORDER BY h.id DESC LIMIT 50`).all(id);
-const autores = db().prepare(`SELECT (SELECT nome FROM utilizadores WHERE id = ?) criador, (SELECT nome FROM utilizadores WHERE id = ?) validador`)
-  .get(p.criado_por, p.validado_por);
+if (sensivel) await auditar(user, 'Consulta de dados sensíveis', `pessoa:${id}`, Astro.locals.ip);
+const prio = calcularPrioridade(p, await parametrosPrioridade());
+const historico = await db.all(`SELECT h.*, u.nome autor FROM historico h LEFT JOIN utilizadores u ON u.id = h.utilizador_id
+  WHERE h.pessoa_id = ? ORDER BY h.id DESC LIMIT 50`, id);
+const autores = await db.get(`SELECT (SELECT nome FROM utilizadores WHERE id = ?) criador, (SELECT nome FROM utilizadores WHERE id = ?) validador`, p.criado_por, p.validado_por);
 
 const sim = (mapa: Record<string, string>) => Object.entries(mapa).filter(([k]) => p[k]).map(([, r]) => r);
 const margem = MARGENS_SALARIAIS.find((m) => m.id === p.margem_salarial)?.nome;

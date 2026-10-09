@@ -1,6 +1,7 @@
 // Dados de demonstração: utilizadores por perfil e beneficiários fictícios.
-// Uso: npm run seed [-- N]   (por omissão 300 registos). Não usar em produção.
-import { db, hashPassword } from '../src/lib/db.js';
+// Uso: npm run seed [-- N]   (por omissão 300 registos). Usa a base local (PGlite) salvo se DATABASE_URL estiver definida.
+// Não usar na base de produção.
+import { db, hashPassword, fechar } from '../src/lib/db.js';
 import { gravarPessoa, validarRegisto } from '../src/lib/pessoas.js';
 import {
   NOMES_PROVINCIAS, CAUSAS, TIPOS_DEFICIENCIA, GRAUS, NIVEIS_ACADEMICOS, SITUACOES_PROFISSIONAIS, MARGENS_SALARIAIS, FONTES_RENDIMENTO,
@@ -70,34 +71,34 @@ function pessoaFicticia(i) {
   return p;
 }
 
-const d = db();
 const DEMO = [
   ['Técnica de Registo', 'tecnico@expoconnect.ao', 'tecnico'],
   ['Analista Estatístico', 'analista@expoconnect.ao', 'analista'],
   ['Gestor do Projecto', 'gestor@expoconnect.ao', 'gestor'],
 ];
 for (const [nome, email, role] of DEMO) {
-  if (!d.prepare('SELECT 1 FROM utilizadores WHERE email = ?').get(email)) {
-    d.prepare('INSERT INTO utilizadores (nome, email, password_hash, role) VALUES (?, ?, ?, ?)').run(nome, email, hashPassword(SENHA), role);
+  if (!(await db.get('SELECT 1 FROM utilizadores WHERE lower(email) = ?', email))) {
+    await db.run('INSERT INTO utilizadores (nome, email, password_hash, role) VALUES (?, ?, ?, ?)', nome, email, hashPassword(SENHA), role);
   }
 }
-const tecnico = d.prepare('SELECT * FROM utilizadores WHERE email = ?').get('tecnico@expoconnect.ao');
+const tecnico = await db.get('SELECT * FROM utilizadores WHERE email = ?', 'tecnico@expoconnect.ao');
 
-const inicio = d.prepare('SELECT COUNT(*) n FROM pessoas').get().n;
+const { n: inicio } = await db.get('SELECT COUNT(*) n FROM pessoas');
 let validados = 0;
 for (let i = inicio + 1; i <= inicio + N; i++) {
-  const id = gravarPessoa(pessoaFicticia(i), tecnico);
+  const id = await gravarPessoa(pessoaFicticia(i), tecnico);
   // Espalha as datas de registo pelos últimos 12 meses.
   const quando = new Date(Date.now() - r() * 365 * 864e5).toISOString().slice(0, 19).replace('T', ' ');
-  d.prepare('UPDATE pessoas SET criado_em = ?, atualizado_em = ? WHERE id = ?').run(quando, quando, id);
-  if (r() < 0.85 && !validarRegisto(id, tecnico)) validados++;
+  await db.run('UPDATE pessoas SET criado_em = ?, atualizado_em = ? WHERE id = ?', quando, quando, id);
+  if (r() < 0.85 && !(await validarRegisto(id, tecnico))) validados++;
 }
 
-const primeiro = d.prepare('SELECT id FROM pessoas ORDER BY id LIMIT 1').get();
-if (primeiro && !d.prepare('SELECT 1 FROM utilizadores WHERE email = ?').get('beneficiario@expoconnect.ao')) {
-  d.prepare('INSERT INTO utilizadores (nome, email, password_hash, role, pessoa_id) VALUES (?, ?, ?, ?, ?)')
-    .run('Beneficiário de demonstração', 'beneficiario@expoconnect.ao', hashPassword(SENHA), 'externo', primeiro.id);
+const primeiro = await db.get('SELECT id FROM pessoas ORDER BY id LIMIT 1');
+if (primeiro && !(await db.get('SELECT 1 FROM utilizadores WHERE email = ?', 'beneficiario@expoconnect.ao'))) {
+  await db.run('INSERT INTO utilizadores (nome, email, password_hash, role, pessoa_id) VALUES (?, ?, ?, ?, ?)',
+    'Beneficiário de demonstração', 'beneficiario@expoconnect.ao', hashPassword(SENHA), 'externo', primeiro.id);
 }
 
 console.log(`${N} registos criados (${validados} validados).`);
 console.log(`Utilizadores de demonstração (palavra-passe "${SENHA}"): ${[...DEMO.map((x) => x[1]), 'beneficiario@expoconnect.ao'].join(', ')}`);
+await fechar();

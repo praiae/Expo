@@ -10,8 +10,8 @@ import { pode, CONDICOES, FUNCIONALIDADE, PRODUTOS, INTENCAO, MARGENS_SALARIAIS 
 const SN = (v) => (v ? 'Sim' : 'Não');
 const margem = (id) => MARGENS_SALARIAIS.find((m) => m.id === id)?.nome ?? '';
 
-function folhaEstatisticas(f) {
-  const e = calcularEstatisticas(f);
+async function folhaEstatisticas(f) {
+  const e = await calcularEstatisticas(f);
   const t = e.totais;
   const tabela = (nome, dados, col = 'Total') => ({ nome, linhas: [['Categoria', col], ...dados.map((d) => [d.nome ?? '—', d.valor])] });
   return [
@@ -57,7 +57,7 @@ function folhaIdentificada(rows, nome) {
   return [{ nome, linhas: [cab, ...linhas] }];
 }
 
-export function GET({ url, locals }) {
+export async function GET({ url, locals }) {
   const user = locals.user;
   const tipo = url.searchParams.get('tipo') || 'estatisticas';
   const f = lerFiltros(url);
@@ -65,29 +65,29 @@ export function GET({ url, locals }) {
   let identificado = false;
 
   if (tipo === 'estatisticas') {
-    folhas = folhaEstatisticas(f);
+    folhas = await folhaEstatisticas(f);
   } else if (tipo === 'anonimo') {
     const { sql, args } = construirWhere(f, { apenasValidados: true });
     // Ordem aleatória para não ser possível reconstruir a sequência de registo.
-    folhas = folhaAnonima(db().prepare(`SELECT * FROM v_pessoas ${sql} ORDER BY random()`).all(...args));
+    folhas = folhaAnonima(await db.all(`SELECT * FROM v_pessoas ${sql} ORDER BY random()`, ...args));
   } else if (tipo === 'lista' || tipo === 'clientes') {
     if (!pode(user, 'exportar.identificado')) return new Response('Exportação identificada não autorizada para o seu perfil.', { status: 403 });
     identificado = true;
     if (tipo === 'lista') {
       const { sql, args } = construirWhere(f);
-      folhas = folhaIdentificada(db().prepare(`SELECT * FROM v_pessoas ${sql} ORDER BY nome`).all(...args), 'Beneficiários');
+      folhas = folhaIdentificada(await db.all(`SELECT * FROM v_pessoas ${sql} ORDER BY nome`, ...args), 'Beneficiários');
     } else {
       const { sql, args } = construirWhere(f, { apenasValidados: true });
       const intencao = url.searchParams.get('intencao');
       const extra = [`(${Object.keys(PRODUTOS).map((k) => `${k} = 1`).join(' OR ')})`, INTENCAO[intencao] ? `${intencao} = 1` : null]
         .filter(Boolean).join(' AND ');
-      folhas = folhaIdentificada(db().prepare(`SELECT * FROM v_pessoas ${sql} ${sql ? 'AND' : 'WHERE'} ${extra} ORDER BY nome`).all(...args), 'Clientes');
+      folhas = folhaIdentificada(await db.all(`SELECT * FROM v_pessoas ${sql} ${sql ? 'AND' : 'WHERE'} ${extra} ORDER BY nome`, ...args), 'Clientes');
     }
   } else {
     return new Response('Tipo de exportação desconhecido.', { status: 400 });
   }
 
-  auditar(user, identificado ? 'Exportação de dados identificados' : 'Exportação estatística', `${tipo} ${JSON.stringify(f)}`, locals.ip);
+  await auditar(user, identificado ? 'Exportação de dados identificados' : 'Exportação estatística', `${tipo} ${JSON.stringify(f)}`, locals.ip);
   const data = new Date().toISOString().slice(0, 10);
   return new Response(gerarXlsx(folhas), {
     headers: {

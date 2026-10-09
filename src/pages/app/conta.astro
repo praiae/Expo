@@ -10,13 +10,13 @@ if (Astro.request.method === 'POST') {
   const actual = String(fd.get('actual') || '');
   const nova = String(fd.get('nova') || '');
   const conf = String(fd.get('confirmar') || '');
-  const u = db().prepare('SELECT password_hash FROM utilizadores WHERE id = ?').get(user.id);
+  const u = await db.get('SELECT password_hash FROM utilizadores WHERE id = ?', user.id);
   if (!verificarPassword(actual, u.password_hash)) erro = 'A palavra-passe actual está incorrecta.';
   else if (nova.length < 10) erro = 'A nova palavra-passe deve ter pelo menos 10 caracteres.';
   else if (nova !== conf) erro = 'A confirmação não coincide.';
   else {
-    db().prepare('UPDATE utilizadores SET password_hash = ? WHERE id = ?').run(hashPassword(nova), user.id);
-    auditar(user, 'Alteração de palavra-passe', null, Astro.locals.ip);
+    await db.run('UPDATE utilizadores SET password_hash = ? WHERE id = ?', hashPassword(nova), user.id);
+    await auditar(user, 'Alteração de palavra-passe', null, Astro.locals.ip);
     ok = 'Palavra-passe alterada com sucesso.';
   }
 }

@@ -14,11 +14,12 @@ const { sql, args } = construirWhere(f, { apenasValidados: true });
 const algumProduto = `(${Object.keys(PRODUTOS).map((k) => `${k} = 1`).join(' OR ')})`;
 const extra = [algumProduto, INTENCAO[intencao] ? `${intencao} = 1` : null].filter(Boolean).join(' AND ');
 const where = `${sql} ${sql ? 'AND' : 'WHERE'} ${extra}`;
-const linhas = db().prepare(`SELECT * FROM v_pessoas ${where} ORDER BY compra_imediata DESC, prioridade ASC, nome LIMIT 300`).all(...args);
-const total = db().prepare(`SELECT COUNT(*) n FROM v_pessoas ${where}`).get(...args).n;
-const porProduto = Object.entries(PRODUTOS).map(([k, nome]) => ({
-  nome, valor: db().prepare(`SELECT COUNT(*) n FROM v_pessoas ${where} AND ${k} = 1`).get(...args).n,
-}));
+const linhas = await db.all(`SELECT * FROM v_pessoas ${where} ORDER BY compra_imediata DESC, prioridade ASC, nome LIMIT 300`, ...args);
+// Total e procura por produto numa única consulta.
+const agg = await db.get(`SELECT COUNT(*) total, ${Object.keys(PRODUTOS).map((k) => `COUNT(*) FILTER (WHERE ${k} = 1) "${k}"`).join(', ')}
+  FROM v_pessoas ${where}`, ...args);
+const total = agg.total;
+const porProduto = Object.entries(PRODUTOS).map(([k, nome]) => ({ nome, valor: agg[k] }));
 const margem = (id: string) => MARGENS_SALARIAIS.find((m) => m.id === id)?.nome ?? '—';
 ---
 <App title="Procura de produtos" ativo="clientes" subtitulo={`${fmt(total)} potencial(is) cliente(s) com procura registada`}>
