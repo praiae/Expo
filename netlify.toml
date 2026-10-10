@@ -4,6 +4,9 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  # ADMIN_EMAIL e ADMIN_REPOR não são segredos (o e-mail é público e "sim" é texto comum);
+  # sem isto o scanner de segredos do Netlify bloqueia o build. ADMIN_PASSWORD e APP_SECRET continuam verificados.
+  SECRETS_SCAN_OMIT_KEYS = "ADMIN_EMAIL,ADMIN_REPOR"
 
 # Cabeçalhos de segurança também para os ficheiros estáticos (as páginas recebem-nos do middleware).
 [[headers]]
