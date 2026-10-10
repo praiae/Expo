@@ -152,8 +152,10 @@ function motor() {
         await tx.query('INSERT INTO parametros (chave, valor) VALUES ($1, $2) ON CONFLICT (chave) DO NOTHING',
           ['prioridade', JSON.stringify(PARAMETROS_PADRAO)]);
         // Garante um administrador activo (mesmo que já existam contas criadas pelo auto-registo).
+        // ADMIN_REPOR=sim força a reposição (recuperar acesso perdido); retire a variável depois de entrar.
+        const repor = /^(sim|1|true)$/i.test(process.env.ADMIN_REPOR || '') && !!process.env.ADMIN_PASSWORD;
         const { rows } = await tx.query("SELECT COUNT(*) n FROM utilizadores WHERE role = 'admin' AND ativo = 1");
-        if (rows[0].n === 0) {
+        if (rows[0].n === 0 || repor) {
           const email = process.env.ADMIN_EMAIL || 'admin@expoconnect.ao';
           const pw = process.env.ADMIN_PASSWORD || (PRODUCAO || URL_EXPLICITO ? '' : 'ExpoConnect2026!');
           if (!pw) {
