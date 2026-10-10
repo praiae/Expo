@@ -62,8 +62,9 @@ export function hashPassword(pw) {
 export function verificarPassword(pw, guardado) {
   const [salt, hash] = String(guardado).split(':');
   if (!salt || !hash) return false;
-  const calc = scryptSync(pw, Buffer.from(salt, 'hex'), 64);
-  return timingSafeEqual(calc, Buffer.from(hash, 'hex'));
+  const esperado = Buffer.from(hash, 'hex');
+  if (esperado.length !== 64) return false; // hash malformado: recusa em vez de lançar erro
+  return timingSafeEqual(scryptSync(pw, Buffer.from(salt, 'hex'), 64), esperado);
 }
 
 
@@ -150,16 +151,20 @@ function motor() {
         }
         await tx.query('INSERT INTO parametros (chave, valor) VALUES ($1, $2) ON CONFLICT (chave) DO NOTHING',
           ['prioridade', JSON.stringify(PARAMETROS_PADRAO)]);
-        const { rows } = await tx.query('SELECT COUNT(*) n FROM utilizadores');
+        // Garante um administrador activo (mesmo que já existam contas criadas pelo auto-registo).
+        const { rows } = await tx.query("SELECT COUNT(*) n FROM utilizadores WHERE role = 'admin' AND ativo = 1");
         if (rows[0].n === 0) {
           const email = process.env.ADMIN_EMAIL || 'admin@expoconnect.ao';
           const pw = process.env.ADMIN_PASSWORD || (PRODUCAO || URL_EXPLICITO ? '' : 'ExpoConnect2026!');
           if (!pw) {
-            console.error('[expo-connect] Nenhum administrador criado: defina ADMIN_PASSWORD nas variáveis de ambiente.');
+            console.error('[expo-connect] Nenhum administrador activo: defina ADMIN_PASSWORD nas variáveis de ambiente.');
           } else {
-            await tx.query('INSERT INTO utilizadores (nome, email, password_hash, role) VALUES ($1, $2, $3, $4)',
-              ['Administrador', email, hashPassword(pw), 'admin']);
-            console.log(`[expo-connect] Administrador criado: ${email}${process.env.ADMIN_PASSWORD ? '' : ` / ${pw}`}`);
+            // Se já existir uma conta com este e-mail (p. ex. um pedido de registo), é convertida em administrador
+            // e a palavra-passe passa a ser a de ADMIN_PASSWORD — quem fez o pedido deixa de conseguir entrar.
+            await tx.query(`INSERT INTO utilizadores (nome, email, password_hash, role, ativo, pendente) VALUES ($1, $2, $3, 'admin', 1, 0)
+              ON CONFLICT ((lower(email))) DO UPDATE SET password_hash = EXCLUDED.password_hash, role = 'admin', ativo = 1, pendente = 0`,
+            ['Administrador', email, hashPassword(pw)]);
+            console.log(`[expo-connect] Administrador activo: ${email}${process.env.ADMIN_PASSWORD ? '' : ` / ${pw}`}`);
           }
         }
       });
