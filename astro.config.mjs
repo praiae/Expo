@@ -29,5 +29,12 @@ export default defineConfig({
       features: { gfm: { footnotes: { label: 'Referências', backLabel: 'Voltar à citação {reference} no texto' } } },
     }),
   },
-  vite: { ssr: { external: ['pg', '@electric-sql/pglite'] } },
+  vite: {
+    ssr: { external: ['pg', '@electric-sql/pglite'] },
+    // Identificação do build (diagnóstico em /api/estado).
+    define: {
+      __BUILD_COMMIT__: JSON.stringify((process.env.COMMIT_REF || 'local').slice(0, 7)),
+      __BUILD_DATA__: JSON.stringify(new Date().toISOString()),
+    },
+  },
 });
