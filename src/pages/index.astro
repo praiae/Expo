@@ -234,6 +234,28 @@ const PASSOS = [
       </ol>
     </section>
 
+    <!-- Aplicação móvel -->
+    <section id="aplicacao" class="seccao container" aria-labelledby="t-app">
+      <div class="app-faixa" data-revelar>
+        <img class="logo-img app-faixa-icone" src="/icon-192.png" alt="" width="96" height="96" loading="lazy" />
+        <div class="app-faixa-texto">
+          <p class="topic">Aplicação móvel</p>
+          <h2 class="como-tit" id="t-app">Leve a Expo Connect no seu telemóvel</h2>
+          <p class="como-desc">Instale gratuitamente em Android ou iPhone, sem passar pelas lojas. Abre em ecrã inteiro e actualiza-se sozinha.</p>
+        </div>
+        <div class="app-botoes">
+          <a class="app-loja" href="/aplicacao#android">
+            <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48 19.44 6.3a.38.38 0 0 0-.66-.38l-1.86 3.22a11.4 11.4 0 0 0-9.84 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52ZM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"/></svg>
+            <span><small>Instalar no</small>Android</span>
+          </a>
+          <a class="app-loja" href="/aplicacao#iphone">
+            <svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76a4.26 4.26 0 0 0-3.6 2.19c-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.3-.88-2.36-3.53ZM14.2 6.13c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.55 1.31-.56.65-1.05 1.69-.92 2.68.97.08 1.96-.49 2.57-1.23Z"/></svg>
+            <span><small>Instalar no</small>iPhone</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
     <!-- Blog -->
     {ultimosArtigos.length > 0 && (
       <section id="blog" class="seccao container" aria-labelledby="t-blog">
@@ -387,6 +409,25 @@ const PASSOS = [
     background: var(--brand-soft); color: var(--topic); font: var(--t-title-2); font-variant-numeric: tabular-nums; }
   .passo-tit { margin: 1.5rem 0 .5rem; font: var(--t-h6); }
   .passo-desc { margin: 0; color: var(--text-2); font: var(--t-body-2); }
+
+  /* Aplicação móvel */
+  .app-faixa { display: grid; grid-template-columns: auto 1fr auto; gap: 1.5rem 2.5rem; align-items: center; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem 2.5rem; }
+  .app-faixa-icone { width: 96px; height: 96px; border-radius: 24px; padding: 6px; }
+  .app-botoes { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .app-loja { display: inline-flex; align-items: center; gap: .75rem; min-height: 56px; padding: 0 1.25rem; border-radius: var(--radius-md);
+    background: #111; color: #fff; text-decoration: none; font: var(--t-title-1); transition: transform .2s, background-color .2s; }
+  .app-loja:hover { background: #000; transform: translateY(-1px); }
+  .app-loja span { display: grid; line-height: 1.15; }
+  .app-loja small { font: var(--t-body-3); opacity: .8; }
+  :root[data-theme="dark"] .app-loja { background: #fff; color: #111; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .app-loja { background: #fff; color: #111; } }
+  @media (max-width: 990px) { .app-faixa { grid-template-columns: auto 1fr; } .app-botoes { grid-column: 1 / -1; } }
+  @media (max-width: 640px) {
+    .app-faixa { grid-template-columns: 1fr; padding: 1.5rem 1.25rem; }
+    .app-faixa-icone { width: 72px; height: 72px; }
+    .app-loja { flex: 1 1 140px; justify-content: center; }
+  }
 
   /* Blog */
   .artigos { list-style: none; padding: 0; margin: 2.5rem 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }

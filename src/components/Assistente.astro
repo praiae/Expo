@@ -1,0 +1,180 @@
+---
+// Assistente do site: responde a perguntas sobre a plataforma a partir de uma base de conhecimento local.
+// Corre no navegador — nada do que se escreve é enviado para servidores.
+---
+<div class="assistente no-print" data-assistente>
+  <button type="button" class="as-abrir" aria-controls="as-painel" aria-expanded="false" data-as-abrir>
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z" /><path d="M8.5 10.5h7M8.5 13.5h4.5" />
+    </svg>
+    <span>Ajuda</span>
+  </button>
+
+  <section id="as-painel" class="as-painel" role="dialog" aria-modal="false" aria-labelledby="as-titulo" hidden data-as-painel>
+    <header class="as-cab">
+      <img class="as-avatar" src="/icon-192.png" alt="" width="36" height="36" />
+      <div>
+        <h2 id="as-titulo" class="as-titulo">Assistente Expo Connect</h2>
+        <p class="as-sub">Respostas automáticas sobre a plataforma</p>
+      </div>
+      <button type="button" class="as-fechar" aria-label="Fechar assistente" data-as-fechar>
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+      </button>
+    </header>
+    <div class="as-msgs" role="log" aria-live="polite" aria-label="Conversa" tabindex="0" data-as-msgs></div>
+    <form class="as-form" data-as-form>
+      <label class="sr-only" for="as-pergunta">Escreva a sua pergunta</label>
+      <input id="as-pergunta" type="text" autocomplete="off" maxlength="300" placeholder="Escreva a sua pergunta…" data-as-input />
+      <button type="submit" class="as-enviar" aria-label="Enviar pergunta">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+      </button>
+    </form>
+    <p class="as-aviso">Não escreva dados pessoais. Para falar com a equipa, use o <a href="/#contacto">contacto</a>.</p>
+  </section>
+</div>
+
+<script>
+  import { responder, porId } from '../lib/assistente.js';
+  import { SUGESTOES_INICIAIS } from '../lib/assistente-base.js';
+
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // Formatação mínima e segura: escapa tudo e só depois converte **negrito**, [ligações](/internas) e quebras de linha.
+  function formatar(t: string) {
+    return esc(t)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\[([^\]]+)\]\((\/[^)\s]*)\)/g, '<a href="$2">$1</a>')
+      .replace(/\n/g, '<br>');
+  }
+  const pausa = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450);
+
+  function iniciar() {
+    const raiz = document.querySelector<HTMLElement>('[data-assistente]');
+    if (!raiz || raiz.dataset.ligado) return;
+    raiz.dataset.ligado = '1';
+    const abrir = raiz.querySelector<HTMLButtonElement>('[data-as-abrir]')!;
+    const painel = raiz.querySelector<HTMLElement>('[data-as-painel]')!;
+    const fechar = raiz.querySelector<HTMLButtonElement>('[data-as-fechar]')!;
+    const msgs = raiz.querySelector<HTMLElement>('[data-as-msgs]')!;
+    const form = raiz.querySelector<HTMLFormElement>('[data-as-form]')!;
+    const input = raiz.querySelector<HTMLInputElement>('[data-as-input]')!;
+    let iniciado = false;
+
+    const rolar = () => { msgs.scrollTop = msgs.scrollHeight; };
+    function mensagem(quem: 'eu' | 'bot', html: string) {
+      const m = document.createElement('div');
+      m.className = `as-msg as-msg--${quem}`;
+      m.innerHTML = `<span class="sr-only">${quem === 'eu' ? 'Você' : 'Assistente'}: </span>${html}`;
+      msgs.append(m);
+      rolar();
+      return m;
+    }
+    function sugestoes(ids: string[]) {
+      const entradas = ids.map(porId).filter(Boolean);
+      if (!entradas.length) return;
+      const caixa = document.createElement('div');
+      caixa.className = 'as-sugs';
+      caixa.setAttribute('role', 'group');
+      caixa.setAttribute('aria-label', 'Sugestões de perguntas');
+      for (const e of entradas) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'as-sug';
+        b.textContent = e!.titulo;
+        b.addEventListener('click', () => perguntar(e!.titulo, e!.id));
+        caixa.append(b);
+      }
+      msgs.append(caixa);
+      rolar();
+    }
+    function perguntar(texto: string, idDirecto?: string) {
+      const t = texto.trim();
+      if (!t) return;
+      msgs.querySelectorAll('.as-sugs').forEach((s) => s.remove());
+      mensagem('eu', esc(t));
+      const escrever = mensagem('bot', '<span class="as-escrever" aria-hidden="true"><i></i><i></i><i></i></span><span class="sr-only">A escrever…</span>');
+      setTimeout(() => {
+        escrever.remove();
+        const entrada = idDirecto ? porId(idDirecto) : responder(t).entrada;
+        if (entrada) {
+          mensagem('bot', formatar(entrada.resposta));
+          sugestoes(entrada.seguintes);
+        } else {
+          const { sugestoes: parecidas } = responder(t);
+          mensagem('bot', formatar('Desculpe, não tenho uma resposta para isso. Experimente reformular, escolha um dos temas abaixo ou escreva à equipa pelo [formulário de contacto](/#contacto).'));
+          sugestoes(parecidas.length ? parecidas.map((e) => e.id) : SUGESTOES_INICIAIS);
+        }
+      }, pausa());
+    }
+    function boasVindas() {
+      if (iniciado) return;
+      iniciado = true;
+      mensagem('bot', formatar('Olá! Sou o assistente da **Expo Connect Angola**. Pergunte-me sobre a plataforma, as contas, a prioridade de atendimento, a privacidade ou a aplicação para telemóvel.'));
+      sugestoes(SUGESTOES_INICIAIS);
+    }
+    function definir(aberto: boolean) {
+      painel.hidden = !aberto;
+      abrir.setAttribute('aria-expanded', String(aberto));
+      raiz!.classList.toggle('as-aberto', aberto);
+      if (aberto) { boasVindas(); input.focus(); } else abrir.focus();
+    }
+
+    abrir.addEventListener('click', () => definir(painel.hidden));
+    fechar.addEventListener('click', () => definir(false));
+    painel.addEventListener('keydown', (e) => { if (e.key === 'Escape') definir(false); });
+    form.addEventListener('submit', (e) => { e.preventDefault(); perguntar(input.value); input.value = ''; });
+  }
+  iniciar();
+  document.addEventListener('astro:page-load', iniciar);
+</script>
+
+<style>
+  .assistente { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+  .as-abrir { display: inline-flex; align-items: center; gap: .5rem; min-height: 52px; padding: 0 1.25rem 0 1.1rem; border: 0; border-radius: 999px;
+    background: var(--primary); color: #fff; font: var(--t-title-1); cursor: pointer; box-shadow: 0 12px 28px -10px rgb(20 40 90 / .55);
+    transition: background-color .2s, transform .2s; }
+  .as-abrir:hover { background: var(--primary-hover); transform: translateY(-1px); }
+  .as-aberto .as-abrir span { display: none; }
+  .as-aberto .as-abrir { padding: 0 1rem; }
+
+  .as-painel { order: -1; width: min(380px, calc(100vw - 32px)); height: min(580px, calc(100dvh - 110px)); display: flex; flex-direction: column;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 30px 60px -20px rgb(20 40 90 / .35); overflow: hidden; }
+  .as-painel[hidden] { display: none; }
+  .as-cab { display: flex; align-items: center; gap: .75rem; padding: .875rem 1rem; border-bottom: 1px solid var(--border); }
+  .as-avatar { border-radius: 10px; background: #fff; border: 1px solid var(--border); padding: 2px; }
+  .as-titulo { margin: 0; font: var(--t-title-1); }
+  .as-sub { margin: 0; font: var(--t-body-3); color: var(--text-2); }
+  .as-fechar { margin-left: auto; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+    background: transparent; color: var(--text); cursor: pointer; }
+  .as-fechar:hover { border-color: var(--link); color: var(--link); }
+
+  .as-msgs { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .625rem; background: var(--bg); outline: none; }
+  .as-msgs :global(.as-msg) { max-width: 88%; padding: .625rem .875rem; border-radius: 14px; font: var(--t-body-2); line-height: 1.5; overflow-wrap: anywhere; }
+  .as-msgs :global(.as-msg--bot) { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .as-msgs :global(.as-msg--eu) { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+  .as-msgs :global(.as-msg a) { color: var(--link); font-weight: 500; }
+  .as-msgs :global(.as-msg strong) { font-weight: 600; }
+  .as-msgs :global(.as-sugs) { display: flex; flex-wrap: wrap; gap: .375rem; }
+  .as-msgs :global(.as-sug) { min-height: 34px; padding: .25rem .75rem; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface);
+    color: var(--text); font: var(--t-body-3); font-weight: 500; cursor: pointer; text-align: left; }
+  .as-msgs :global(.as-sug:hover) { border-color: var(--link); color: var(--link); }
+  .as-msgs :global(.as-escrever) { display: inline-flex; gap: 4px; padding: 4px 0; }
+  .as-msgs :global(.as-escrever i) { width: 6px; height: 6px; border-radius: 50%; background: var(--text-2); animation: as-pulsar 1s infinite ease-in-out; }
+  .as-msgs :global(.as-escrever i:nth-child(2)) { animation-delay: .15s; }
+  .as-msgs :global(.as-escrever i:nth-child(3)) { animation-delay: .3s; }
+  @keyframes as-pulsar { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+
+  .as-form { display: flex; gap: .5rem; padding: .75rem; border-top: 1px solid var(--border); }
+  .as-form input { flex: 1; min-height: 44px; }
+  .as-enviar { display: grid; place-items: center; width: 44px; min-width: 44px; border: 0; border-radius: var(--radius-md); background: var(--primary); color: #fff; cursor: pointer; }
+  .as-enviar:hover { background: var(--primary-hover); }
+  .as-aviso { margin: 0; padding: 0 .875rem .75rem; font: var(--t-body-3); color: var(--text-2); }
+
+  :root[data-contrast="alto"] .as-abrir, :root[data-contrast="alto"] .as-enviar { color: var(--brand-ink); }
+
+  @media (max-width: 520px) {
+    .assistente { right: 12px; bottom: 12px; }
+    .as-aberto { left: 12px; top: 12px; }
+    .as-painel { width: 100%; height: 100%; }
+    .as-aberto .as-abrir { display: none; }
+  }
+</style>

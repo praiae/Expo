@@ -1,0 +1,167 @@
+---
+import Base from '../layouts/Base.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+
+export const prerender = true;
+---
+<Base title="Aplicação para Android e iPhone · Expo Connect Angola" description="Instale a Expo Connect Angola no seu telemóvel Android ou iPhone, gratuitamente e sem passar pelas lojas de aplicações.">
+  <SiteHeader />
+  <main id="conteudo" class="container app-movel">
+    <header class="am-cab">
+      <img class="logo-img am-icone" src="/icon-192.png" alt="" width="88" height="88" />
+      <div>
+        <p class="topic">Aplicação móvel</p>
+        <h1 class="am-tit">Expo Connect no seu telemóvel</h1>
+        <p class="am-desc">Instale a plataforma como aplicação: fica com um ícone no ecrã inicial, abre em ecrã inteiro e funciona em
+          Android e iPhone. É gratuita, ocupa muito pouco espaço e actualiza-se sozinha.</p>
+      </div>
+    </header>
+
+    <p class="alerta alerta--ok am-instalada" role="status" hidden data-instalada>
+      A aplicação já está instalada neste dispositivo. Pode abri-la pelo ícone «Expo Connect» no ecrã inicial.
+    </p>
+
+    <div class="am-grelha">
+      <section class="card am-plat" id="android" aria-labelledby="t-android" data-plataforma="android">
+        <div class="am-plat-cab">
+          <svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M17.6 9.48 19.44 6.3a.38.38 0 0 0-.66-.38l-1.86 3.22a11.4 11.4 0 0 0-9.84 0L5.22 5.92a.38.38 0 0 0-.66.38L6.4 9.48A10.8 10.8 0 0 0 1 18h22a10.8 10.8 0 0 0-5.4-8.52ZM7 15.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm10 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z"/></svg>
+          <h2 id="t-android">Android</h2>
+          <span class="tag am-detectado" hidden data-detectado>O seu dispositivo</span>
+        </div>
+        <button type="button" class="btn am-instalar" hidden data-instalar>Instalar aplicação</button>
+        <p class="hint am-nota" hidden data-instalar-nota>Toque no botão e confirme «Instalar».</p>
+        <ol class="am-passos">
+          <li>Abra <strong>expoconnect.tech</strong> no <strong>Google Chrome</strong>.</li>
+          <li>Toque no menu <strong>⋮</strong> (três pontos, canto superior direito).</li>
+          <li>Escolha <strong>«Instalar aplicação»</strong> ou <strong>«Adicionar ao ecrã principal»</strong>.</li>
+          <li>Confirme em <strong>«Instalar»</strong>. O ícone aparece no ecrã inicial.</li>
+        </ol>
+      </section>
+
+      <section class="card am-plat" id="iphone" aria-labelledby="t-iphone" data-plataforma="ios">
+        <div class="am-plat-cab">
+          <svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.88-.76a4.26 4.26 0 0 0-3.6 2.19c-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.3-.88-2.36-3.53ZM14.2 6.13c.6-.73 1.01-1.75.9-2.76-.87.04-1.92.58-2.55 1.31-.56.65-1.05 1.69-.92 2.68.97.08 1.96-.49 2.57-1.23Z"/></svg>
+          <h2 id="t-iphone">iPhone e iPad</h2>
+          <span class="tag am-detectado" hidden data-detectado>O seu dispositivo</span>
+        </div>
+        <ol class="am-passos">
+          <li>Abra <strong>expoconnect.tech</strong> no <strong>Safari</strong> (no iPhone a instalação só funciona no Safari).</li>
+          <li>Toque no botão <strong>Partilhar</strong>
+            <svg class="am-ic-partilhar" aria-label="ícone partilhar" role="img" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>
+            na barra inferior.</li>
+          <li>Desça e escolha <strong>«Adicionar ao ecrã principal»</strong>.</li>
+          <li>Toque em <strong>«Adicionar»</strong>. O ícone aparece no ecrã inicial.</li>
+        </ol>
+      </section>
+
+      <section class="card am-plat" aria-labelledby="t-pc" data-plataforma="desktop">
+        <div class="am-plat-cab">
+          <svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <h2 id="t-pc">Computador</h2>
+          <span class="tag am-detectado" hidden data-detectado>O seu dispositivo</span>
+        </div>
+        <ol class="am-passos">
+          <li>Abra <strong>expoconnect.tech</strong> no <strong>Chrome</strong> ou no <strong>Edge</strong>.</li>
+          <li>Clique no ícone de instalação <strong>⊕</strong> na barra de endereço, ou use o botão «Instalar aplicação» desta página.</li>
+          <li>A plataforma abre numa janela própria, como um programa.</li>
+        </ol>
+      </section>
+    </div>
+
+    <section class="am-perguntas" aria-labelledby="t-perguntas">
+      <h2 id="t-perguntas" class="am-sub">Perguntas frequentes</h2>
+      <details class="card"><summary>Preciso da Play Store ou da App Store?</summary>
+        <p>Não. A aplicação instala-se directamente a partir do site, sem lojas e sem conta Google ou Apple.</p></details>
+      <details class="card"><summary>É gratuita? Ocupa muito espaço?</summary>
+        <p>É gratuita e ocupa muito menos espaço do que uma aplicação tradicional (normalmente menos de 1 MB).</p></details>
+      <details class="card"><summary>Como recebo actualizações?</summary>
+        <p>Automaticamente: sempre que abre a aplicação com ligação à internet, recebe a versão mais recente.</p></details>
+      <details class="card"><summary>Funciona sem internet?</summary>
+        <p>As páginas públicas que já visitou podem ser consultadas sem ligação. A área reservada (registos e relatórios) precisa
+          sempre de internet — por segurança, os dados pessoais nunca ficam guardados no telemóvel.</p></details>
+      <details class="card"><summary>Como desinstalo?</summary>
+        <p>Como qualquer aplicação: mantenha o dedo sobre o ícone e escolha «Desinstalar» (Android) ou «Remover aplicação» (iPhone).</p></details>
+    </section>
+  </main>
+  <SiteFooter />
+</Base>
+
+<script>
+  type EventoInstalar = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+  let pedido: EventoInstalar | null = null;
+
+  function plataforma() {
+    const ua = navigator.userAgent;
+    if (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return 'ios';
+    if (/Android/.test(ua)) return 'android';
+    return 'desktop';
+  }
+  const instalada = () => matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+
+  function iniciar() {
+    const p = plataforma();
+    document.querySelectorAll<HTMLElement>(`[data-plataforma="${p}"] [data-detectado]`).forEach((e) => (e.hidden = false));
+    const cartao = document.querySelector<HTMLElement>(`[data-plataforma="${p}"]`);
+    cartao?.classList.add('am-actual');
+    if (instalada()) document.querySelector<HTMLElement>('[data-instalada]')!.hidden = false;
+    if (pedido) mostrarBotao();
+  }
+
+  function mostrarBotao() {
+    const alvo = document.querySelector<HTMLElement>(plataforma() === 'desktop' ? '[data-plataforma="desktop"]' : '#android');
+    const btn = document.querySelector<HTMLButtonElement>('[data-instalar]');
+    const nota = document.querySelector<HTMLElement>('[data-instalar-nota]');
+    if (!btn || !alvo) return;
+    alvo.querySelector('.am-plat-cab')!.after(btn, nota!);
+    btn.hidden = false;
+    nota!.hidden = false;
+    if (btn.dataset.ligado) return;
+    btn.dataset.ligado = '1';
+    btn.addEventListener('click', async () => {
+      if (!pedido) return;
+      await pedido.prompt();
+      const { outcome } = await pedido.userChoice;
+      if (outcome === 'accepted') { btn.hidden = true; nota!.hidden = true; }
+      pedido = null;
+    });
+  }
+
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); pedido = e as EventoInstalar; mostrarBotao(); });
+  addEventListener('appinstalled', () => { document.querySelector<HTMLElement>('[data-instalada]')!.hidden = false; });
+  iniciar();
+  document.addEventListener('astro:page-load', iniciar);
+</script>
+
+<style>
+  .app-movel { padding-top: 5rem; }
+  .am-cab { display: grid; grid-template-columns: auto 1fr; gap: 2rem; align-items: start; max-width: 880px; }
+  .am-icone { width: 88px; height: 88px; border-radius: 22px; padding: 6px; }
+  .am-tit { margin: 0; font: var(--t-h2); font-size: clamp(2rem, 4vw, 3rem); text-wrap: balance; }
+  .am-desc { margin: 1rem 0 0; color: var(--text-2); font-size: 1.0625rem; max-width: 60ch; }
+  .am-instalada { margin-top: 2rem; }
+  .am-grelha { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2.5rem; align-items: start; }
+  .am-plat { transition: border-color .2s; }
+  .am-plat.am-actual { border-color: var(--primary); box-shadow: 0 20px 40px -24px rgb(20 40 90 / .3); }
+  .am-plat-cab { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+  .am-plat-cab svg { color: var(--topic); }
+  .am-plat-cab h2 { margin: 0; font: var(--t-h5); }
+  .am-detectado { margin-left: auto; }
+  .am-instalar { width: 100%; margin-top: 1.25rem; }
+  .am-nota { display: block; margin-top: .5rem; text-align: center; }
+  .am-passos { margin: 1.25rem 0 0; padding-left: 1.25rem; display: grid; gap: .75rem; color: var(--text-2); font: var(--t-body-2); }
+  .am-passos li::marker { color: var(--topic); font-weight: 600; }
+  .am-passos strong { color: var(--text); font-weight: 600; }
+  .am-ic-partilhar { vertical-align: -3px; color: var(--link); }
+  .am-perguntas { margin-top: 4rem; max-width: 880px; display: grid; gap: .75rem; }
+  .am-sub { margin: 0 0 .75rem; font: var(--t-h4); }
+  .am-perguntas details { padding: 1.25rem 1.5rem; }
+  .am-perguntas summary { cursor: pointer; font: var(--t-title-1); }
+  .am-perguntas details p { margin: .75rem 0 0; color: var(--text-2); font: var(--t-body-2); }
+  @media (max-width: 990px) { .am-grelha { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    .app-movel { padding-top: 3rem; }
+    .am-cab { grid-template-columns: 1fr; gap: 1.25rem; }
+    .am-icone { width: 72px; height: 72px; }
+  }
+</style>

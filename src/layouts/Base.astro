@@ -1,6 +1,7 @@
 ---
 import { ClientRouter } from 'astro:transitions';
 import '../styles/global.css';
+import Assistente from '../components/Assistente.astro';
 
 interface Props { title?: string; description?: string; transicoes?: boolean; }
 const {
@@ -18,7 +19,15 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
     <title>{title}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+    <!-- Aplicação instalável (PWA) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#2f63e0" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Expo Connect" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
@@ -49,5 +58,12 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
   <body>
     <a class="skip-link" href="#conteudo">Saltar para o conteúdo</a>
     <slot />
+    <Assistente />
+    <script is:inline>
+      // Regista o service worker (aplicação instalável e página offline).
+      if ('serviceWorker' in navigator) {
+        addEventListener('load', function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); });
+      }
+    </script>
   </body>
 </html>
